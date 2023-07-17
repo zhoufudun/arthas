@@ -212,7 +212,7 @@ public class ReflectUtils {
         while ((index = className.indexOf("[]", index) + 1) > 0) {
             dimensions++;
         }
-        StringBuilder brackets = new StringBuilder(className.length() - dimensions);
+        StringBuffer brackets = new StringBuffer(className.length() - dimensions);
         for (int i = 0; i < dimensions; i++) {
             brackets.append('[');
         }

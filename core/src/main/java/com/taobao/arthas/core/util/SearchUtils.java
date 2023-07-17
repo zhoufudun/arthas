@@ -31,9 +31,6 @@ public class SearchUtils {
         }
         final Set<Class<?>> matches = new HashSet<Class<?>>();
         for (Class<?> clazz : inst.getAllLoadedClasses()) {
-            if (clazz == null) {
-                continue;   
-            }
             if (classNameMatcher.matching(clazz.getName())) {
                 matches.add(clazz);
             }
@@ -82,7 +79,7 @@ public class SearchUtils {
         Set<Class<?>> result = new HashSet<Class<?>>();
         if (matchedClasses != null) {
             for (Class<?> c : matchedClasses) {
-                if (c.getClassLoader() != null && Integer.toHexString(c.getClassLoader().hashCode()).equals(code)) {
+                if (Integer.toHexString(c.getClassLoader().hashCode()).equals(code)) {
                     result.add(c);
                 }
             }
@@ -110,9 +107,6 @@ public class SearchUtils {
     public static Set<Class<?>> searchSubClass(Instrumentation inst, Set<Class<?>> classSet) {
         final Set<Class<?>> matches = new HashSet<Class<?>>();
         for (Class<?> clazz : inst.getAllLoadedClasses()) {
-            if (clazz == null) {
-                continue;   
-            }
             for (Class<?> superClass : classSet) {
                 if (superClass.isAssignableFrom(clazz)) {
                     matches.add(clazz);
@@ -122,6 +116,7 @@ public class SearchUtils {
         }
         return matches;
     }
+
 
     /**
      * 搜索目标类的内部类

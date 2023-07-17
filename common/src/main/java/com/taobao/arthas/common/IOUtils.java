@@ -22,9 +22,6 @@ import java.util.zip.ZipFile;
  */
 public class IOUtils {
 
-    private IOUtils() {
-    }
-
     public static String toString(InputStream inputStream) throws IOException {
         ByteArrayOutputStream result = new ByteArrayOutputStream();
         byte[] buffer = new byte[1024];
@@ -94,14 +91,6 @@ public class IOUtils {
         return null;
     }
 
-    public static boolean isSubFile(File parent, File child) throws IOException {
-        return child.getCanonicalPath().startsWith(parent.getCanonicalPath() + File.separator);
-    }
- 
-    public static boolean isSubFile(String parent, String child) throws IOException {
-        return isSubFile(new File(parent), new File(child));
-    }
-
     public static void unzip(String zipFile, String extractFolder) throws IOException {
         File file = new File(zipFile);
         ZipFile zip = null;
@@ -109,28 +98,35 @@ public class IOUtils {
             int BUFFER = 1024 * 8;
 
             zip = new ZipFile(file);
-            File newPath = new File(extractFolder);
-            newPath.mkdirs();
-
+            String newPath = extractFolder;
+            /**
+             * 創建指定的extractFolder目錄
+             */
+            new File(newPath).mkdir();
             Enumeration<? extends ZipEntry> zipFileEntries = zip.entries();
 
             // Process each entry
+            /**
+             * 遍历压缩文件中的每一项（文件或者目录）
+             */
             while (zipFileEntries.hasMoreElements()) {
                 // grab a zip file entry
                 ZipEntry entry = (ZipEntry) zipFileEntries.nextElement();
                 String currentEntry = entry.getName();
 
                 File destFile = new File(newPath, currentEntry);
-                if (!isSubFile(newPath, destFile)) {
-                    throw new IOException("Bad zip entry: " + currentEntry);
-                }
-
                 // destFile = new File(newPath, destFile.getName());
                 File destinationParent = destFile.getParentFile();
 
                 // create the parent directory structure if needed
+                /**
+                 * 不存在父目录，就创建
+                 */
                 destinationParent.mkdirs();
-
+                /**
+                 * 当前项是文件
+                 * 疑问：当前是目录怎么处理？？？？？
+                 */
                 if (!entry.isDirectory()) {
                     BufferedInputStream is = null;
                     BufferedOutputStream dest = null;

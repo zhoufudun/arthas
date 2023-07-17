@@ -1,8 +1,5 @@
 package com.taobao.arthas.core.shell.impl;
 
-import com.alibaba.arthas.deps.org.slf4j.Logger;
-import com.alibaba.arthas.deps.org.slf4j.LoggerFactory;
-import com.alibaba.arthas.tunnel.client.TunnelClient;
 import com.taobao.arthas.core.server.ArthasBootstrap;
 import com.taobao.arthas.core.shell.Shell;
 import com.taobao.arthas.core.shell.ShellServer;
@@ -20,12 +17,12 @@ import com.taobao.arthas.core.shell.system.impl.InternalCommandManager;
 import com.taobao.arthas.core.shell.system.impl.JobControllerImpl;
 import com.taobao.arthas.core.shell.term.Term;
 import com.taobao.arthas.core.shell.term.TermServer;
-import com.taobao.arthas.core.util.ArthasBanner;
+import com.taobao.arthas.core.util.LogUtil;
+import com.taobao.middleware.logger.Logger;
 
 import java.lang.instrument.Instrumentation;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -34,7 +31,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -43,7 +39,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class ShellServerImpl extends ShellServer {
 
-    private static final Logger logger = LoggerFactory.getLogger(ShellServerImpl.class);
+    private static final Logger logger = LogUtil.getArthasLogger();
 
     private final CopyOnWriteArrayList<CommandResolver> resolvers;
     private final InternalCommandManager commandManager;
@@ -51,8 +47,9 @@ public class ShellServerImpl extends ShellServer {
     private final long timeoutMillis;
     private final long reaperInterval;
     private String welcomeMessage;
+    private ArthasBootstrap bootstrap;
     private Instrumentation instrumentation;
-    private long pid;
+    private int pid;
     private boolean closed = true;
     private final Map<String, ShellImpl> sessions;
     private final Future<Void> sessionsClosed = Future.future();
@@ -60,6 +57,10 @@ public class ShellServerImpl extends ShellServer {
     private JobControllerImpl jobController = new GlobalJobControllerImpl();
 
     public ShellServerImpl(ShellServerOptions options) {
+        this(options, null);
+    }
+
+    public ShellServerImpl(ShellServerOptions options, ArthasBootstrap bootstrap) {
         this.welcomeMessage = options.getWelcomeMessage();
         this.termServers = new ArrayList<TermServer>();
         this.timeoutMillis = options.getSessionTimeout();
@@ -68,6 +69,7 @@ public class ShellServerImpl extends ShellServer {
         this.resolvers = new CopyOnWriteArrayList<CommandResolver>();
         this.commandManager = new InternalCommandManager(resolvers);
         this.instrumentation = options.getInstrumentation();
+        this.bootstrap = bootstrap;
         this.pid = options.getPid();
 
         // Register builtin commands so they are listed in help
@@ -86,6 +88,17 @@ public class ShellServerImpl extends ShellServer {
         return this;
     }
 
+    /**
+     *
+     * 这里就初始化了session对象，然后设置了对应的欢迎语，所以你attach成功后，看到了图形界面，wiki，version等。
+     *
+     * 这里注意的是ShellImpl构造把命令列表以及内建命令缓存到session内存。
+     * session.readline(); 然后就是等待用户命令输入了，如图中$。 这里利用了term框架封装好的readline方法库，同时根据对应ShellLineHandler来回调处理相应的命令。
+     *
+     *
+     *
+     * @param term
+     */
     public void handleTerm(Term term) {
         synchronized (this) {
             // That might happen with multiple ser
@@ -96,24 +109,14 @@ public class ShellServerImpl extends ShellServer {
         }
 
         ShellImpl session = createShell(term);
-        tryUpdateWelcomeMessage();
+        // 开启 Arthas 的时候的欢迎语输出的地方了
         session.setWelcome(welcomeMessage);
+        // 关闭后调用SessionClosedHandler的handle方法
         session.closedFuture.setHandler(new SessionClosedHandler(this, session));
         session.init();
         sessions.put(session.id, session); // Put after init so the close handler on the connection is set
+//        读取用户的输入
         session.readline(); // Now readline
-    }
-
-    private void tryUpdateWelcomeMessage() {
-        TunnelClient tunnelClient = ArthasBootstrap.getInstance().getTunnelClient();
-        if (tunnelClient != null) {
-            String id = tunnelClient.getId();
-            if (id != null) {
-                Map<String, String> welcomeInfos = new HashMap<String, String>();
-                welcomeInfos.put("id", id);
-                this.welcomeMessage = ArthasBanner.welcome(welcomeInfos);
-            }
-        }
     }
 
     @Override
@@ -133,6 +136,7 @@ public class ShellServerImpl extends ShellServer {
         }
         Handler<Future<TermServer>> handler = new TermServerListenHandler(this, listenHandler, toStart);
         for (TermServer termServer : toStart) {
+            // 在监听到有命令的时候会调用com.taobao.arthas.core.shell.handlers.server.TermServerTermHandler.handle
             termServer.termHandler(new TermServerTermHandler(this));
             termServer.listen(handler);
         }
@@ -159,14 +163,8 @@ public class ShellServerImpl extends ShellServer {
 
     public synchronized void setTimer() {
         if (!closed && reaperInterval > 0) {
-            scheduledExecutorService = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
-                @Override
-                public Thread newThread(Runnable r) {
-                    final Thread t = new Thread(r, "arthas-shell-server");
-                    t.setDaemon(true);
-                    return t;
-                }
-            });
+            scheduledExecutorService = Executors.newSingleThreadScheduledExecutor();
+            // TODO rename the thread, currently it is `pool-3-thread-1`, which is ambiguous
             scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
                 @Override
@@ -188,13 +186,12 @@ public class ShellServerImpl extends ShellServer {
         if (job != null) {
             // close shell's foreground job
             job.terminate();
-            logger.info("Session {} closed, so terminate foreground job, id: {}, line: {}",
+            logger.info(null, "Session {} closed, so terminate foreground job, id: {}, line: {}",
                         shell.session().getSessionId(), job.id(), job.line());
         }
 
         synchronized (ShellServerImpl.this) {
             sessions.remove(shell.id);
-            shell.close("network error");
             completeSessionClosed = sessions.isEmpty() && closed;
         }
         if (completeSessionClosed) {
@@ -250,14 +247,7 @@ public class ShellServerImpl extends ShellServer {
             }
             jobController.close();
             sessionsClosed.setHandler(handler);
+            bootstrap.destroy();
         }
-    }
-
-    public JobControllerImpl getJobController() {
-        return jobController;
-    }
-
-    public InternalCommandManager getCommandManager() {
-        return commandManager;
     }
 }

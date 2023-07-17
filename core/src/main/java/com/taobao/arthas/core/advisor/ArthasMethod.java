@@ -4,109 +4,43 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 
-import com.alibaba.deps.org.objectweb.asm.Type;
-import com.taobao.arthas.core.util.StringUtils;
-
 /**
- * 
- * 主要用于 tt 命令重放使用
- * 
- * @author vlinux on 15/5/24
- * @author hengyunabc 2020-05-20
- *
+ * Arthas封装的方法<br/>
+ * 主要用来封装构造函数cinit/init/method
+ * Created by vlinux on 15/5/24.
  */
 public class ArthasMethod {
-    private final Class<?> clazz;
-    private final String methodName;
-    private final String methodDesc;
 
-    private Constructor<?> constructor;
-    private Method method;
+    private final int type;
+    private final Constructor<?> constructor;
+    private final Method method;
 
-    private void initMethod() {
-        if (constructor != null || method != null) {
-            return;
-        }
+    /*
+     * 构造方法
+     */
+    private static final int TYPE_INIT = 1 << 1;
 
-        try {
-            ClassLoader loader = this.clazz.getClassLoader();
-            final Type asmType = Type.getMethodType(methodDesc);
+    /*
+     * 普通方法
+     */
+    private static final int TYPE_METHOD = 1 << 2;
 
-            // to arg types
-            final Class<?>[] argsClasses = new Class<?>[asmType.getArgumentTypes().length];
-            for (int index = 0; index < argsClasses.length; index++) {
-                // asm class descriptor to jvm class
-                final Class<?> argumentClass;
-                final Type argumentAsmType = asmType.getArgumentTypes()[index];
-                switch (argumentAsmType.getSort()) {
-                case Type.BOOLEAN: {
-                    argumentClass = boolean.class;
-                    break;
-                }
-                case Type.CHAR: {
-                    argumentClass = char.class;
-                    break;
-                }
-                case Type.BYTE: {
-                    argumentClass = byte.class;
-                    break;
-                }
-                case Type.SHORT: {
-                    argumentClass = short.class;
-                    break;
-                }
-                case Type.INT: {
-                    argumentClass = int.class;
-                    break;
-                }
-                case Type.FLOAT: {
-                    argumentClass = float.class;
-                    break;
-                }
-                case Type.LONG: {
-                    argumentClass = long.class;
-                    break;
-                }
-                case Type.DOUBLE: {
-                    argumentClass = double.class;
-                    break;
-                }
-                case Type.ARRAY: {
-                    argumentClass = toClass(loader, argumentAsmType.getInternalName());
-                    break;
-                }
-                case Type.VOID: {
-                    argumentClass = void.class;
-                    break;
-                }
-                case Type.OBJECT:
-                case Type.METHOD:
-                default: {
-                    argumentClass = toClass(loader, argumentAsmType.getClassName());
-                    break;
-                }
-                }
-
-                argsClasses[index] = argumentClass;
-            }
-
-            if ("<init>".equals(this.methodName)) {
-                this.constructor = clazz.getDeclaredConstructor(argsClasses);
-            } else {
-                this.method = clazz.getDeclaredMethod(methodName, argsClasses);
-            }
-        } catch (Throwable e) {
-            throw new RuntimeException(e);
-        }
-
+    /**
+     * 是否构造方法
+     *
+     * @return true/false
+     */
+    public boolean isInit() {
+        return (TYPE_INIT & type) == TYPE_INIT;
     }
 
-    private Class<?> toClass(ClassLoader loader, String className) throws ClassNotFoundException {
-        return Class.forName(StringUtils.normalizeClassName(className), true, toClassLoader(loader));
-    }
-
-    private ClassLoader toClassLoader(ClassLoader loader) {
-        return null != loader ? loader : ArthasMethod.class.getClassLoader();
+    /**
+     * 是否普通方法
+     *
+     * @return true/false
+     */
+    public boolean isMethod() {
+        return (TYPE_METHOD & type) == TYPE_METHOD;
     }
 
     /**
@@ -115,53 +49,50 @@ public class ArthasMethod {
      * @return 返回方法名称
      */
     public String getName() {
-        return this.methodName;
+        return isInit()
+                ? "<init>"
+                : method.getName();
     }
 
     @Override
     public String toString() {
-        initMethod();
-        if (constructor != null) {
-            return constructor.toString();
-        } else if (method != null) {
-            return method.toString();
-        }
-        return "ERROR_METHOD";
+        return isInit()
+                ? constructor.toString()
+                : method.toString();
     }
 
     public boolean isAccessible() {
-        initMethod();
-        if (this.method != null) {
-            return method.isAccessible();
-        } else if (this.constructor != null) {
-            return constructor.isAccessible();
-        }
-        return false;
+        return isInit()
+                ? constructor.isAccessible()
+                : method.isAccessible();
     }
 
     public void setAccessible(boolean accessFlag) {
-        initMethod();
-        if (constructor != null) {
+        if (isInit()) {
             constructor.setAccessible(accessFlag);
-        } else if (method != null) {
+        } else {
             method.setAccessible(accessFlag);
         }
     }
 
-    public Object invoke(Object target, Object... args)
-            throws IllegalAccessException, InvocationTargetException, InstantiationException {
-        initMethod();
-        if (method != null) {
-            return method.invoke(target, args);
-        } else if (this.constructor != null) {
-            return constructor.newInstance(args);
-        }
-        return null;
+    public Object invoke(Object target, Object... args) throws IllegalAccessException, InvocationTargetException, InstantiationException {
+        return isInit()
+                ? constructor.newInstance(args)
+                : method.invoke(target, args);
     }
 
-    public ArthasMethod(Class<?> clazz, String methodName, String methodDesc) {
-        this.clazz = clazz;
-        this.methodName = methodName;
-        this.methodDesc = methodDesc;
+    private ArthasMethod(int type, Constructor<?> constructor, Method method) {
+        this.type = type;
+        this.constructor = constructor;
+        this.method = method;
     }
+
+    public static ArthasMethod newInit(Constructor<?> constructor) {
+        return new ArthasMethod(TYPE_INIT, constructor, null);
+    }
+
+    public static ArthasMethod newMethod(Method method) {
+        return new ArthasMethod(TYPE_METHOD, null, method);
+    }
+
 }

@@ -1,14 +1,7 @@
 package com.taobao.arthas.core.shell.system.impl;
 
-import com.alibaba.arthas.deps.org.slf4j.Logger;
-import com.alibaba.arthas.deps.org.slf4j.LoggerFactory;
 import com.taobao.arthas.core.advisor.AdviceListener;
 import com.taobao.arthas.core.advisor.AdviceWeaver;
-import com.taobao.arthas.core.command.basic1000.HelpCommand;
-import com.taobao.arthas.core.command.model.ResultModel;
-import com.taobao.arthas.core.command.model.StatusModel;
-import com.taobao.arthas.core.distribution.ResultDistributor;
-import com.taobao.arthas.core.distribution.impl.TermResultDistributorImpl;
 import com.taobao.arthas.core.server.ArthasBootstrap;
 import com.taobao.arthas.core.shell.cli.CliToken;
 import com.taobao.arthas.core.shell.command.Command;
@@ -19,13 +12,17 @@ import com.taobao.arthas.core.shell.handlers.Handler;
 import com.taobao.arthas.core.shell.session.Session;
 import com.taobao.arthas.core.shell.system.ExecStatus;
 import com.taobao.arthas.core.shell.system.Process;
-import com.taobao.arthas.core.shell.system.ProcessAware;
 import com.taobao.arthas.core.shell.term.Tty;
+import com.taobao.arthas.core.util.LogUtil;
+import com.taobao.arthas.core.util.usage.StyledUsageFormatter;
 import com.taobao.middleware.cli.CLIException;
 import com.taobao.middleware.cli.CommandLine;
+import com.taobao.middleware.cli.UsageMessageFormatter;
+import com.taobao.middleware.logger.Logger;
+import com.taobao.text.Color;
+
 import io.termd.core.function.Function;
 
-import java.lang.instrument.ClassFileTransformer;
 import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
@@ -33,11 +30,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @author beiwei30 on 10/11/2016.
- * @author gongdewei 2020-03-26
  */
 public class ProcessImpl implements Process {
 
-    private static final Logger logger = LoggerFactory.getLogger(ProcessImpl.class);
+    private static final Logger logger = LogUtil.getArthasLogger();
 
     private Command commandContext;
     private Handler<CommandProcess> handler;
@@ -57,18 +53,16 @@ public class ProcessImpl implements Process {
     private Handler<String> stdinHandler;
     private Handler<Void> resizeHandler;
     private Integer exitCode;
-    private CommandProcessImpl process;
+    private CommandProcess process;
     private Date startTime;
     private ProcessOutput processOutput;
     private int jobId;
-    private ResultDistributor resultDistributor;
 
     public ProcessImpl(Command commandContext, List<CliToken> args, Handler<CommandProcess> handler,
-                       ProcessOutput processOutput, ResultDistributor resultDistributor) {
+                       ProcessOutput processOutput) {
         this.commandContext = commandContext;
         this.handler = handler;
         this.args = args;
-        this.resultDistributor = resultDistributor;
         this.processStatus = ExecStatus.READY;
         this.processOutput = processOutput;
     }
@@ -240,15 +234,13 @@ public class ProcessImpl implements Process {
 
     @Override
     public void terminate(Handler<Void> completionHandler) {
-        if (!terminate(-10, completionHandler, null)) {
+        if (!terminate(-10, completionHandler)) {
             throw new IllegalStateException("Cannot terminate terminated process");
         }
     }
 
-    private synchronized boolean terminate(int exitCode, Handler<Void> completionHandler, String message) {
+    private synchronized boolean terminate(int exitCode, Handler<Void> completionHandler) {
         if (processStatus != ExecStatus.TERMINATED) {
-            //add status message
-            this.appendResult(new StatusModel(exitCode, message));
             if (process != null) {
                 processOutput.close();
             }
@@ -259,13 +251,6 @@ public class ProcessImpl implements Process {
             return true;
         } else {
             return false;
-        }
-    }
-
-    private void appendResult(ResultModel result) {
-        result.setJobId(jobId);
-        if (resultDistributor != null) {
-            resultDistributor.appendResult(result);
         }
     }
 
@@ -333,11 +318,6 @@ public class ProcessImpl implements Process {
             throw new IllegalStateException("Cannot execute process without a TTY set");
         }
 
-        process = new CommandProcessImpl(this, tty);
-        if (resultDistributor == null) {
-            resultDistributor = new TermResultDistributorImpl(process, ArthasBootstrap.getInstance().getResultViewResolver());
-        }
-
         final List<String> args2 = new LinkedList<String>();
         for (CliToken arg : args) {
             if (arg.isText()) {
@@ -349,20 +329,25 @@ public class ProcessImpl implements Process {
         try {
             if (commandContext.cli() != null) {
                 if (commandContext.cli().parse(args2, false).isAskingForHelp()) {
-                    appendResult(new HelpCommand().createHelpDetailModel(commandContext));
+                    UsageMessageFormatter formatter = new StyledUsageFormatter(Color.green);
+                    formatter.setWidth(tty.width());
+                    StringBuilder usage = new StringBuilder();
+                    commandContext.cli().usage(usage, formatter);
+                    usage.append('\n');
+                    tty.write(usage.toString());
                     terminate();
                     return;
                 }
 
                 cl = commandContext.cli().parse(args2);
-                process.setArgs2(args2);
-                process.setCommandLine(cl);
             }
         } catch (CLIException e) {
-            terminate(-10, null, e.getMessage());
+            tty.write(e.getMessage() + "\n");
+            terminate();
             return;
         }
 
+        process = new CommandProcessImpl(args2, tty, cl);
         if (cacheLocation() != null) {
             process.echoTips("job id  : " + this.jobId + "\n");
             process.echoTips("cache location  : " + cacheLocation() + "\n");
@@ -384,26 +369,26 @@ public class ProcessImpl implements Process {
             try {
                 handler.handle(process);
             } catch (Throwable t) {
-                logger.error("Error during processing the command:", t);
-                process.end(1, "Error during processing the command: " + t.getClass().getName() + ", message:" + t.getMessage()
-                        + ", please check $HOME/logs/arthas/arthas.log for more details." );
+                logger.error(null, "Error during processing the command:", t);
+                process.write("Error during processing the command: " + t.getMessage() + "\n");
+                terminate(1, null);
             }
         }
     }
 
     private class CommandProcessImpl implements CommandProcess {
 
-        private final Process process;
+        private final List<String> args2;
         private final Tty tty;
-        private List<String> args2;
-        private CommandLine commandLine;
+        private final CommandLine commandLine;
+        private int enhanceLock = -1;
         private AtomicInteger times = new AtomicInteger();
-        private AdviceListener listener = null;
-        private ClassFileTransformer transformer;
+        private AdviceListener suspendedListener = null;
 
-        public CommandProcessImpl(Process process, Tty tty) {
-            this.process = process;
+        public CommandProcessImpl(List<String> args2, Tty tty, CommandLine commandLine) {
+            this.args2 = args2;
             this.tty = tty;
+            this.commandLine = commandLine;
         }
 
         @Override
@@ -449,14 +434,6 @@ public class ProcessImpl implements Process {
         @Override
         public AtomicInteger times() {
             return times;
-        }
-
-        public void setArgs2(List<String> args2) {
-            this.args2 = args2;
-        }
-
-        public void setCommandLine(CommandLine commandLine) {
-            this.commandLine = commandLine;
         }
 
         @Override
@@ -546,49 +523,29 @@ public class ProcessImpl implements Process {
         }
 
         @Override
-        public void register(AdviceListener adviceListener, ClassFileTransformer transformer) {
-            if (adviceListener instanceof ProcessAware) {
-                ProcessAware processAware = (ProcessAware) adviceListener;
-                // listener 有可能是其它 command 创建的
-                if(processAware.getProcess() == null) {
-                    processAware.setProcess(this.process);
-                }
-            }
-            this.listener = adviceListener;
-            AdviceWeaver.reg(listener);
-            
-            this.transformer = transformer;
+        public void register(int enhanceLock, AdviceListener listener) {
+            this.enhanceLock = enhanceLock;
+            AdviceWeaver.reg(enhanceLock, listener);
         }
 
         @Override
         public void unregister() {
-            if (transformer != null) {
-                ArthasBootstrap.getInstance().getTransformerManager().removeTransformer(transformer);
-            }
-            
-            if (listener instanceof ProcessAware) {
-                // listener有可能其它 command 创建的，所以不能unRge
-                if (this.process.equals(((ProcessAware) listener).getProcess())) {
-                    AdviceWeaver.unReg(listener);
-                }
-            } else {
-                AdviceWeaver.unReg(listener);
-            }
+            AdviceWeaver.unReg(enhanceLock);
         }
 
         @Override
         public void resume() {
-//            if (suspendedListener != null) {
-//                AdviceWeaver.resume(suspendedListener);
-//                suspendedListener = null;
-//            }
+            if (this.enhanceLock >= 0 && suspendedListener != null) {
+                AdviceWeaver.resume(enhanceLock, suspendedListener);
+                suspendedListener = null;
+            }
         }
 
         @Override
         public void suspend() {
-//            if (this.enhanceLock >= 0) {
-//                suspendedListener = AdviceWeaver.suspend(enhanceLock);
-//            }
+            if (this.enhanceLock >= 0) {
+                suspendedListener = AdviceWeaver.suspend(enhanceLock);
+            }
         }
 
         @Override
@@ -598,26 +555,12 @@ public class ProcessImpl implements Process {
 
         @Override
         public void end(int statusCode) {
-            end(statusCode, null);
-        }
-
-        @Override
-        public void end(int statusCode, String message) {
-            terminate(statusCode, null, message);
+            terminate(statusCode, null);
         }
 
         @Override
         public boolean isRunning() {
             return processStatus == ExecStatus.RUNNING;
-        }
-
-        @Override
-        public void appendResult(ResultModel result) {
-            if (processStatus != ExecStatus.RUNNING) {
-                throw new IllegalStateException(
-                        "Cannot write to standard output when " + status().name().toLowerCase());
-            }
-            ProcessImpl.this.appendResult(result);
         }
     }
 
@@ -654,10 +597,7 @@ public class ProcessImpl implements Process {
 
         private void write(String data) {
             if (stdoutHandlerChain != null) {
-                //hotspot, reduce memory fragment (foreach/iterator)
-                int size = stdoutHandlerChain.size();
-                for (int i = 0; i < size; i++) {
-                    Function<String, String> function = stdoutHandlerChain.get(i);
+                for (Function<String, String> function : stdoutHandlerChain) {
                     data = function.apply(data);
                 }
             }

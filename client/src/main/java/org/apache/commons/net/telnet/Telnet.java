@@ -1065,7 +1065,7 @@ class Telnet extends SocketClient
                 _output_.flush();
             }
             aytMonitor.wait(timeout);
-            if (!aytFlag)
+            if (aytFlag == false)
             {
                 retValue = false;
                 aytFlag = true;

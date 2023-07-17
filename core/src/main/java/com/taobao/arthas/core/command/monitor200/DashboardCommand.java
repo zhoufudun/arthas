@@ -1,37 +1,41 @@
 package com.taobao.arthas.core.command.monitor200;
 
-import java.lang.management.GarbageCollectorMXBean;
-import java.lang.management.ManagementFactory;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Timer;
-import java.util.TimerTask;
-import java.util.concurrent.atomic.AtomicLong;
-
-import com.alibaba.arthas.deps.org.slf4j.Logger;
-import com.alibaba.arthas.deps.org.slf4j.LoggerFactory;
-import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.JSONObject;
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONObject;
 import com.taobao.arthas.core.command.Constants;
-import com.taobao.arthas.core.command.model.DashboardModel;
-import com.taobao.arthas.core.command.model.GcInfoVO;
-import com.taobao.arthas.core.command.model.RuntimeInfoVO;
-import com.taobao.arthas.core.command.model.ThreadVO;
-import com.taobao.arthas.core.command.model.TomcatInfoVO;
 import com.taobao.arthas.core.shell.command.AnnotatedCommand;
 import com.taobao.arthas.core.shell.command.CommandProcess;
 import com.taobao.arthas.core.shell.handlers.Handler;
 import com.taobao.arthas.core.shell.handlers.shell.QExitHandler;
 import com.taobao.arthas.core.shell.session.Session;
+import com.taobao.arthas.core.util.LogUtil;
 import com.taobao.arthas.core.util.NetUtils;
 import com.taobao.arthas.core.util.NetUtils.Response;
-import com.taobao.arthas.core.util.StringUtils;
 import com.taobao.arthas.core.util.ThreadUtil;
 import com.taobao.arthas.core.util.metrics.SumRateCounter;
 import com.taobao.middleware.cli.annotations.Description;
 import com.taobao.middleware.cli.annotations.Name;
 import com.taobao.middleware.cli.annotations.Option;
 import com.taobao.middleware.cli.annotations.Summary;
+import com.taobao.middleware.logger.Logger;
+import com.taobao.text.Color;
+import com.taobao.text.Decoration;
+import com.taobao.text.Style;
+import com.taobao.text.renderers.ThreadRenderer;
+import com.taobao.text.ui.RowElement;
+import com.taobao.text.ui.TableElement;
+import com.taobao.text.util.RenderUtil;
+
+import java.lang.management.BufferPoolMXBean;
+import java.lang.management.GarbageCollectorMXBean;
+import java.lang.management.ManagementFactory;
+import java.lang.management.MemoryPoolMXBean;
+import java.lang.management.MemoryType;
+import java.lang.management.MemoryUsage;
+import java.util.List;
+import java.util.Map;
+import java.util.Timer;
+import java.util.TimerTask;
 
 /**
  * @author hengyunabc 2015年11月19日 上午11:57:21
@@ -45,7 +49,7 @@ import com.taobao.middleware.cli.annotations.Summary;
         Constants.WIKI + Constants.WIKI_HOME + "dashboard")
 public class DashboardCommand extends AnnotatedCommand {
 
-    private static final Logger logger = LoggerFactory.getLogger(DashboardCommand.class);
+    private static final Logger logger = LogUtil.getArthasLogger();
 
     private SumRateCounter tomcatRequestCounter = new SumRateCounter();
     private SumRateCounter tomcatErrorCounter = new SumRateCounter();
@@ -54,15 +58,23 @@ public class DashboardCommand extends AnnotatedCommand {
 
     private int numOfExecutions = Integer.MAX_VALUE;
 
+    private boolean batchMode;
+
     private long interval = 5000;
 
-    private final AtomicLong count = new AtomicLong(0);
+    private volatile long count = 0;
     private volatile Timer timer;
 
     @Option(shortName = "n", longName = "number-of-execution")
     @Description("The number of times this command will be executed.")
     public void setNumOfExecutions(int numOfExecutions) {
         this.numOfExecutions = numOfExecutions;
+    }
+
+    @Option(shortName = "b", longName = "batch")
+    @Description("Execute this command in batch mode.")
+    public void setBatchMode(boolean batchMode) {
+        this.batchMode = batchMode;
     }
 
     @Option(shortName = "i", longName = "interval")
@@ -128,50 +140,105 @@ public class DashboardCommand extends AnnotatedCommand {
         return numOfExecutions;
     }
 
+    public boolean isBatchMode() {
+        return batchMode;
+    }
+
     public long getInterval() {
         return interval;
     }
 
-    private static void addRuntimeInfo(DashboardModel dashboardModel) {
-        RuntimeInfoVO runtimeInfo = new RuntimeInfoVO();
-        runtimeInfo.setOsName(System.getProperty("os.name"));
-        runtimeInfo.setOsVersion(System.getProperty("os.version"));
-        runtimeInfo.setJavaVersion(System.getProperty("java.version"));
-        runtimeInfo.setJavaHome(System.getProperty("java.home"));
-        runtimeInfo.setSystemLoadAverage(ManagementFactory.getOperatingSystemMXBean().getSystemLoadAverage());
-        runtimeInfo.setProcessors(Runtime.getRuntime().availableProcessors());
-        runtimeInfo.setUptime(ManagementFactory.getRuntimeMXBean().getUptime() / 1000);
-        runtimeInfo.setTimestamp(System.currentTimeMillis());
-        dashboardModel.setRuntimeInfo(runtimeInfo);
+    private static String beautifyName(String name) {
+        return name.replace(' ', '_').toLowerCase();
     }
 
-    private static void addGcInfo(DashboardModel dashboardModel) {
-        List<GcInfoVO> gcInfos = new ArrayList<GcInfoVO>();
-        dashboardModel.setGcInfos(gcInfos);
+    private static void addBufferPoolMemoryInfo(TableElement table) {
+        try {
+            @SuppressWarnings("rawtypes")
+            Class bufferPoolMXBeanClass = Class.forName("java.lang.management.BufferPoolMXBean");
+            @SuppressWarnings("unchecked")
+            List<BufferPoolMXBean> bufferPoolMXBeans = ManagementFactory.getPlatformMXBeans(bufferPoolMXBeanClass);
+            for (BufferPoolMXBean mbean : bufferPoolMXBeans) {
+                long used = mbean.getMemoryUsed();
+                long total = mbean.getTotalCapacity();
+                new MemoryEntry(mbean.getName(), used, total, Long.MIN_VALUE).addTableRow(table);
+            }
+        } catch (ClassNotFoundException e) {
+            // ignore
+        }
+    }
 
+    private static void addRuntimeInfo(TableElement table) {
+        table.row("os.name", System.getProperty("os.name"));
+        table.row("os.version", System.getProperty("os.version"));
+        table.row("java.version", System.getProperty("java.version"));
+        table.row("java.home", System.getProperty("java.home"));
+        table.row("systemload.average",
+                String.format("%.2f", ManagementFactory.getOperatingSystemMXBean().getSystemLoadAverage()));
+        table.row("processors", "" + Runtime.getRuntime().availableProcessors());
+        table.row("uptime", "" + ManagementFactory.getRuntimeMXBean().getUptime() / 1000 + "s");
+    }
+
+    private static void addMemoryInfo(TableElement table) {
+        MemoryUsage heapMemoryUsage = ManagementFactory.getMemoryMXBean().getHeapMemoryUsage();
+        MemoryUsage nonHeapMemoryUsage = ManagementFactory.getMemoryMXBean().getNonHeapMemoryUsage();
+
+        List<MemoryPoolMXBean> memoryPoolMXBeans = ManagementFactory.getMemoryPoolMXBeans();
+
+        new MemoryEntry("heap", heapMemoryUsage).addTableRow(table, Decoration.bold.bold());
+        for (MemoryPoolMXBean poolMXBean : memoryPoolMXBeans) {
+            if (MemoryType.HEAP.equals(poolMXBean.getType())) {
+                MemoryUsage usage = poolMXBean.getUsage();
+                String poolName = beautifyName(poolMXBean.getName());
+                new MemoryEntry(poolName, usage).addTableRow(table);
+            }
+        }
+
+        new MemoryEntry("nonheap", nonHeapMemoryUsage).addTableRow(table, Decoration.bold.bold());
+        for (MemoryPoolMXBean poolMXBean : memoryPoolMXBeans) {
+            if (MemoryType.NON_HEAP.equals(poolMXBean.getType())) {
+                MemoryUsage usage = poolMXBean.getUsage();
+                String poolName = beautifyName(poolMXBean.getName());
+                new MemoryEntry(poolName, usage).addTableRow(table);
+            }
+        }
+
+        addBufferPoolMemoryInfo(table);
+    }
+
+    private static void addGcInfo(TableElement table) {
         List<GarbageCollectorMXBean> garbageCollectorMxBeans = ManagementFactory.getGarbageCollectorMXBeans();
-        for (GarbageCollectorMXBean gcMXBean : garbageCollectorMxBeans) {
-            String name = gcMXBean.getName();
-            gcInfos.add(new GcInfoVO(StringUtils.beautifyName(name), gcMXBean.getCollectionCount(), gcMXBean.getCollectionTime()));
+        for (GarbageCollectorMXBean garbageCollectorMXBean : garbageCollectorMxBeans) {
+            String name = garbageCollectorMXBean.getName();
+            table.add(new RowElement().style(Decoration.bold.bold()).add("gc." + beautifyName(name) + ".count",
+                    "" + garbageCollectorMXBean.getCollectionCount()));
+            table.row("gc." + beautifyName(name) + ".time(ms)", "" + garbageCollectorMXBean.getCollectionTime());
         }
     }
 
-    private void addTomcatInfo(DashboardModel dashboardModel) {
-        // 如果请求tomcat信息失败，则不显示tomcat信息
-        if (!NetUtils.request("http://localhost:8006").isSuccess()) {
-            return;
+    private static String formatBytes(long size) {
+        int unit = 1;
+        String unitStr = "B";
+        if (size / 1024 > 0) {
+            unit = 1024;
+            unitStr = "K";
+        } else if (size / 1024 / 1024 > 0) {
+            unit = 1024 * 1024;
+            unitStr = "M";
         }
 
-        TomcatInfoVO tomcatInfoVO = new TomcatInfoVO();
-        dashboardModel.setTomcatInfo(tomcatInfoVO);
+        return String.format("%d%s", size / unit, unitStr);
+    }
+
+    private void addTomcatInfo(TableElement table) {
+
         String threadPoolPath = "http://localhost:8006/connector/threadpool";
         String connectorStatPath = "http://localhost:8006/connector/stats";
         Response connectorStatResponse = NetUtils.request(connectorStatPath);
         if (connectorStatResponse.isSuccess()) {
-            List<TomcatInfoVO.ConnectorStats> connectorStats = new ArrayList<TomcatInfoVO.ConnectorStats>();
-            List<JSONObject> tomcatConnectorStats = JSON.parseArray(connectorStatResponse.getContent(), JSONObject.class);
-            for (JSONObject stat : tomcatConnectorStats) {
-                String connectorName = stat.getString("name").replace("\"", "");
+            List<JSONObject> connectorStats = JSON.parseArray(connectorStatResponse.getContent(), JSONObject.class);
+            for (JSONObject stat : connectorStats) {
+                String name = stat.getString("name").replace("\"", "");
                 long bytesReceived = stat.getLongValue("bytesReceived");
                 long bytesSent = stat.getLongValue("bytesSent");
                 long processingTime = stat.getLongValue("processingTime");
@@ -183,90 +250,173 @@ public class DashboardCommand extends AnnotatedCommand {
                 tomcatReceivedBytesCounter.update(bytesReceived);
                 tomcatSentBytesCounter.update(bytesSent);
 
-                double qps = tomcatRequestCounter.rate();
-                double rt = processingTime / (double) requestCount;
-                double errorRate = tomcatErrorCounter.rate();
-                long receivedBytesRate = Double.valueOf(tomcatReceivedBytesCounter.rate()).longValue();
-                long sentBytesRate = Double.valueOf(tomcatSentBytesCounter.rate()).longValue();
-
-                TomcatInfoVO.ConnectorStats connectorStat = new TomcatInfoVO.ConnectorStats();
-                connectorStat.setName(connectorName);
-                connectorStat.setQps(qps);
-                connectorStat.setRt(rt);
-                connectorStat.setError(errorRate);
-                connectorStat.setReceived(receivedBytesRate);
-                connectorStat.setSent(sentBytesRate);
-                connectorStats.add(connectorStat);
+                table.add(new RowElement().style(Decoration.bold.bold()).add("connector", name));
+                table.row("QPS", String.format("%.2f", tomcatRequestCounter.rate()));
+                table.row("RT(ms)", String.format("%.2f", processingTime / (double) requestCount));
+                table.row("error/s", String.format("%.2f", tomcatErrorCounter.rate()));
+                table.row("received/s", formatBytes((long) tomcatReceivedBytesCounter.rate()));
+                table.row("sent/s", formatBytes((long) tomcatSentBytesCounter.rate()));
             }
-            tomcatInfoVO.setConnectorStats(connectorStats);
         }
 
         Response threadPoolResponse = NetUtils.request(threadPoolPath);
         if (threadPoolResponse.isSuccess()) {
-            List<TomcatInfoVO.ThreadPool> threadPools = new ArrayList<TomcatInfoVO.ThreadPool>();
             List<JSONObject> threadPoolInfos = JSON.parseArray(threadPoolResponse.getContent(), JSONObject.class);
             for (JSONObject info : threadPoolInfos) {
                 String name = info.getString("name").replace("\"", "");
                 long busy = info.getLongValue("threadBusy");
                 long total = info.getLongValue("threadCount");
-                threadPools.add(new TomcatInfoVO.ThreadPool(name, busy, total));
+                table.add(new RowElement().style(Decoration.bold.bold()).add("threadpool", name));
+                table.row("busy", "" + busy);
+                table.row("total", "" + total);
             }
-            tomcatInfoVO.setThreadPools(threadPools);
+        }
+    }
+
+    static String drawThreadInfo(int width, int height) {
+        Map<String, Thread> threads = ThreadUtil.getThreads();
+        return RenderUtil.render(threads.values().iterator(), new ThreadRenderer(), width, height);
+    }
+
+    static String drawMemoryInfoAndGcInfo(int width, int height) {
+        TableElement table = new TableElement(1, 1);
+
+        TableElement memoryInfoTable = new TableElement(3, 1, 1, 1, 1).rightCellPadding(1);
+        memoryInfoTable.add(new RowElement().style(Decoration.bold.fg(Color.black).bg(Color.white)).add("Memory",
+                "used", "total", "max", "usage"));
+
+        addMemoryInfo(memoryInfoTable);
+
+        TableElement gcInfoTable = new TableElement(1, 1).rightCellPadding(1);
+        gcInfoTable.add(new RowElement().style(Decoration.bold.fg(Color.black).bg(Color.white)).add("GC", ""));
+        addGcInfo(gcInfoTable);
+
+        table.row(memoryInfoTable, gcInfoTable);
+        return RenderUtil.render(table, width, height);
+    }
+
+    String drawRuntimeInfoAndTomcatInfo(int width, int height) {
+        TableElement resultTable = new TableElement(1, 1);
+
+        TableElement runtimeInfoTable = new TableElement(1, 1).rightCellPadding(1);
+        runtimeInfoTable
+                .add(new RowElement().style(Decoration.bold.fg(Color.black).bg(Color.white)).add("Runtime", ""));
+
+        addRuntimeInfo(runtimeInfoTable);
+
+        TableElement tomcatInfoTable = null;
+
+        try {
+            // 如果请求tomcat信息失败，则不显示tomcat信息
+            if (NetUtils.request("http://localhost:8006").isSuccess()) {
+                tomcatInfoTable = new TableElement(1, 1).rightCellPadding(1);
+                tomcatInfoTable
+                        .add(new RowElement().style(Decoration.bold.fg(Color.black).bg(Color.white)).add("Tomcat", ""));
+                addTomcatInfo(tomcatInfoTable);
+            }
+        } catch (Throwable t) {
+            logger.error(null, "get Tomcat Info error!", t);
+        }
+
+        if (tomcatInfoTable != null) {
+            resultTable.row(runtimeInfoTable, tomcatInfoTable);
+        } else {
+            resultTable = runtimeInfoTable;
+        }
+
+        return RenderUtil.render(resultTable, width, height);
+    }
+
+    static class MemoryEntry {
+        String name;
+        long used;
+        long total;
+        long max;
+
+        int unit;
+        String unitStr;
+
+        public MemoryEntry(String name, long used, long total, long max) {
+            this.name = name;
+            this.used = used;
+            this.total = total;
+            this.max = max;
+
+            unitStr = "K";
+            unit = 1024;
+            if (used / 1024 / 1024 > 0) {
+                unitStr = "M";
+                unit = 1024 * 1024;
+            }
+        }
+
+        public MemoryEntry(String name, MemoryUsage usage) {
+            this(name, usage.getUsed(), usage.getCommitted(), usage.getMax());
+        }
+
+        private String format(long value) {
+            String valueStr = "-";
+            if (value == -1) {
+                return "-1";
+            }
+            if (value != Long.MIN_VALUE) {
+                valueStr = value / unit + unitStr;
+            }
+            return valueStr;
+        }
+
+        public void addTableRow(TableElement table) {
+            double usage = used / (double) (max == -1 || max == Long.MIN_VALUE ? total : max) * 100;
+
+            table.row(name, format(used), format(total), format(max), String.format("%.2f%%", usage));
+        }
+
+        public void addTableRow(TableElement table, Style.Composite style) {
+            double usage = used / (double) (max == -1 || max == Long.MIN_VALUE ? total : max) * 100;
+
+            table.add(new RowElement().style(style).add(name, format(used), format(total), format(max),
+                    String.format("%.2f%%", usage)));
         }
     }
 
     private class DashboardTimerTask extends TimerTask {
         private CommandProcess process;
-        private ThreadSampler threadSampler;
 
         public DashboardTimerTask(CommandProcess process) {
             this.process = process;
-            this.threadSampler = new ThreadSampler();
         }
 
         @Override
         public void run() {
-            try {
-                if (count.get() >= getNumOfExecutions()) {
-                    // stop the timer
-                    timer.cancel();
-                    timer.purge();
-                    process.end(0, "Process ends after " + getNumOfExecutions() + " time(s).");
-                    return;
-                }
-
-                DashboardModel dashboardModel = new DashboardModel();
-
-                //thread sample
-                List<ThreadVO> threads = ThreadUtil.getThreads();
-                dashboardModel.setThreads(threadSampler.sample(threads));
-
-                //memory
-                dashboardModel.setMemoryInfo(MemoryCommand.memoryInfo());
-
-                //gc
-                addGcInfo(dashboardModel);
-
-                //runtime
-                addRuntimeInfo(dashboardModel);
-
-                //tomcat
-                try {
-                    addTomcatInfo(dashboardModel);
-                } catch (Throwable e) {
-                    logger.error("try to read tomcat info error", e);
-                }
-
-                process.appendResult(dashboardModel);
-
-                count.getAndIncrement();
-                process.times().incrementAndGet();
-            } catch (Throwable e) {
-                String msg = "process dashboard failed: " + e.getMessage();
-                logger.error(msg, e);
-                process.end(-1, msg);
+            if (count >= getNumOfExecutions()) {
+                // stop the timer
+                timer.cancel();
+                timer.purge();
+                process.write("Process ends after " + getNumOfExecutions() + " time(s).\n");
+                process.end();
+                return;
             }
+
+            int width = process.width();
+            int height = process.height();
+
+            // 上半部分放thread top。下半部分再切分为田字格，其中上面两格放memory, gc的信息。下面两格放tomcat,
+            // runtime的信息
+            int totalHeight = height - 1;
+            int threadTopHeight = totalHeight / 2;
+            int lowerHalf = totalHeight - threadTopHeight;
+
+            int runtimeInfoHeight = lowerHalf / 2;
+            int heapInfoHeight = lowerHalf - runtimeInfoHeight;
+
+            String threadInfo = drawThreadInfo(width, threadTopHeight);
+            String memoryAndGc = drawMemoryInfoAndGcInfo(width, runtimeInfoHeight);
+            String runTimeAndTomcat = drawRuntimeInfoAndTomcatInfo(width, heapInfoHeight);
+
+            process.write(threadInfo + memoryAndGc + runTimeAndTomcat);
+
+            count++;
+            process.times().incrementAndGet();
         }
     }
-
 }

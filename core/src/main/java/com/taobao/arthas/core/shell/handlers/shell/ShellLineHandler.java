@@ -24,6 +24,16 @@ public class ShellLineHandler implements Handler<String> {
         this.term = shell.term();
     }
 
+    /**
+     * 接受用户输入的命令行
+     *
+     *
+     * 首先会去解析输入的命令，一般可能你的命令带参数比如trace命令会带上类和方法名，
+     * 所以这里要把命令从输入中解析出来，可以看到如果是是 exit、logout、quit、jobs、fg、bg、kill
+     * 等 Arthas 本身的运行命令直接执行，如果是其他命令就创建一个job来执行。
+     *
+     * @param line
+     */
     @Override
     public void handle(String line) {
         if (line == null) {
@@ -39,9 +49,9 @@ public class ShellLineHandler implements Handler<String> {
             shell.readline();
             return;
         }
-
+        // 处理特殊命令，这些命令可以实时响应
         String name = first.value();
-        if (name.equals("exit") || name.equals("logout") || name.equals("q") || name.equals("quit")) {
+        if (name.equals("exit") || name.equals("logout") || name.equals("quit")) {
             handleExit();
             return;
         } else if (name.equals("jobs")) {

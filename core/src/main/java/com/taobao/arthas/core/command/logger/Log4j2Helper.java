@@ -19,6 +19,8 @@ import org.apache.logging.log4j.core.appender.FileAppender;
 import org.apache.logging.log4j.core.config.Configuration;
 import org.apache.logging.log4j.core.config.LoggerConfig;
 
+import com.taobao.arthas.core.util.StringUtils;
+
 /**
  * 
  * @author hengyunabc 2019-09-20
@@ -94,7 +96,7 @@ public class Log4j2Helper {
                 return loggerInfoMap;
             }
             // 排掉非root时，获取到root的logger config
-            if (!name.equalsIgnoreCase(LoggerConfig.ROOT) && isEmpty(loggerConfig.getName())) {
+            if (!name.equalsIgnoreCase(LoggerConfig.ROOT) && StringUtils.isEmpty(loggerConfig.getName())) {
                 return loggerInfoMap;
             }
             loggerInfoMap.put(name, doGetLoggerInfo(loggerConfig));
@@ -188,7 +190,4 @@ public class Log4j2Helper {
         return result;
     }
 
-    private static boolean isEmpty(Object str) {
-        return str == null || "".equals(str);
-    }
 }

@@ -45,6 +45,53 @@ public class TermImpl implements Term {
         this(com.taobao.arthas.core.shell.term.impl.Helper.loadKeymap(), conn);
     }
 
+    /**
+     * TermImpl内部首先可以看到对Function类通过spi进行了所有Function的加载，
+     * Function就是刚才快捷键对应的处理类，下面随便看看一个类，快捷键向上看历史命令。
+     *
+     *
+     * readlineFunctions通过spi获取所有的实现，举个例子看：HistorySearchBackward
+     *
+     * public class HistorySearchBackward implements Function {
+     *   @Override
+     *   public String name() {
+     *       return "history-search-backward";
+     *   }
+     *   @Override
+     *   public void apply(Readline.Interaction interaction) {
+     *       LineBuffer buf = interaction.buffer().copy();
+     *       int cursor = buf.getCursor();
+     *       List<int[]> history = interaction.history();
+     *
+     *       int curr = interaction.getHistoryIndex();
+     *
+     *       int searchStart = curr + 1;
+     *
+     *       for (int i = searchStart; i < history.size(); ++i) {
+     *           int[] line = history.get(i);
+     *           if (LineBufferUtils.equals(buf, line)) {
+     *               continue;
+     *           }
+     *           if (LineBufferUtils.matchBeforeCursor(buf, line)) {
+     *               interaction.refresh(new LineBuffer().insert(line).setCursor(cursor));
+     *               interaction.setHistoryIndex(i);
+     *               break;
+     *           }
+     *       }
+     *       interaction.resume();
+     *   }
+     * }
+     *
+     *
+     *
+     * 上面可以看到readline的字段history，通过本地history文件加载出来。我们执行的历史命令都会存储到history文件中。 可以猜测history命令怎么查找所有历史命令，就是这样拿出来的。
+     * 接着实例化DefaultTermStdinHandler，EventHandler以及对应的赋值，然后结合term框架，对相应的快捷键进行处理，这里就不多说，感兴趣自行去看。下面会重点说明help的整个过程。
+     * 回到上面termHandler.handle(new TermImpl(Helper.loadKeymap(), conn));这一行代码。回顾一下最上面termServer listen的时候, termServer.termHandler(new TermServerTermHandler(this));
+     * 实例化了TermServerTermHandler。所以这里执行了TermServerTermHandler.handle方法
+     *
+     * @param keymap
+     * @param conn
+     */
     public TermImpl(Keymap keymap, TtyConnection conn) {
         this.conn = conn;
         readline = new Readline(keymap);
@@ -219,10 +266,6 @@ public class TermImpl implements Term {
         if (suspendHandler == null || !suspendHandler.deliver(key)) {
             echo(key, 'Z' - 64);
         }
-    }
-
-    public TtyConnection getConn() {
-        return conn;
     }
 
     public void echo(int... codePoints) {

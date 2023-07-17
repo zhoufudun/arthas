@@ -66,9 +66,6 @@ public abstract class AnsiLog {
         }
     }
 
-    private AnsiLog() {
-    }
-
     public static boolean enableColor() {
         return enableColor;
     }
@@ -278,7 +275,7 @@ public abstract class AnsiLog {
             String computed = from;
             if (arguments != null && arguments.length != 0) {
                 for (Object argument : arguments) {
-                    computed = computed.replaceFirst("\\{\\}", Matcher.quoteReplacement(String.valueOf(argument)));
+                    computed = computed.replaceFirst("\\{\\}", Matcher.quoteReplacement(argument.toString()));
                 }
             }
             return computed;

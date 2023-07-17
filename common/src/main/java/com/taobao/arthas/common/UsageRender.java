@@ -7,9 +7,6 @@ package com.taobao.arthas.common;
  */
 public class UsageRender {
 
-    private UsageRender() {
-    }
-
     public static String render(String usage) {
         if (AnsiLog.enableColor()) {
             StringBuilder sb = new StringBuilder(1024);

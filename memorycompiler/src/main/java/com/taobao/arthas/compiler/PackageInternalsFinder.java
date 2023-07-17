@@ -26,7 +26,6 @@ import java.io.IOException;
 import java.net.JarURLConnection;
 import java.net.URI;
 import java.net.URL;
-import java.net.URLDecoder;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Enumeration;
@@ -56,7 +55,7 @@ public class PackageInternalsFinder {
     }
 
     private Collection<JavaFileObject> listUnder(String packageName, URL packageFolderURL) {
-        File directory = new File(decode(packageFolderURL.getFile()));
+        File directory = new File(packageFolderURL.getFile());
         if (directory.isDirectory()) { // browse local .class files - useful for local execution
             return processDir(packageName, directory);
         } else { // browse a jar file
@@ -95,30 +94,18 @@ public class PackageInternalsFinder {
         List<JavaFileObject> result = new ArrayList<JavaFileObject>();
 
         File[] childFiles = directory.listFiles();
-        if (childFiles != null) {
-            for (File childFile : childFiles) {
-                if (childFile.isFile()) {
-                    // We only want the .class files.
-                    if (childFile.getName().endsWith(CLASS_FILE_EXTENSION)) {
-                        String binaryName = packageName + "." + childFile.getName();
-                        binaryName = binaryName.replaceAll(CLASS_FILE_EXTENSION + "$", "");
+        for (File childFile : childFiles) {
+            if (childFile.isFile()) {
+                // We only want the .class files.
+                if (childFile.getName().endsWith(CLASS_FILE_EXTENSION)) {
+                    String binaryName = packageName + "." + childFile.getName();
+                    binaryName = binaryName.replaceAll(CLASS_FILE_EXTENSION + "$", "");
 
-                        result.add(new CustomJavaFileObject(binaryName, childFile.toURI()));
-                    }
+                    result.add(new CustomJavaFileObject(binaryName, childFile.toURI()));
                 }
             }
         }
 
         return result;
-    }
-
-    private String decode(String filePath) {
-        try {
-            return URLDecoder.decode(filePath, "utf-8");
-        } catch (Exception e) {
-            // ignore, return original string
-        }
-
-        return filePath;
     }
 }

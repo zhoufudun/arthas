@@ -7,7 +7,6 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Member;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -258,7 +257,9 @@ public class FieldUtils {
         Class<?> currentClass = cls;
         while (currentClass != null) {
             final Field[] declaredFields = currentClass.getDeclaredFields();
-            allFields.addAll(Arrays.asList(declaredFields));
+            for (final Field field : declaredFields) {
+                allFields.add(field);
+            }
             currentClass = currentClass.getSuperclass();
         }
         return allFields;
@@ -443,7 +444,7 @@ public class FieldUtils {
     }
 
     static void isTrue(final boolean expression, final String message, final Object... values) {
-        if (!expression) {
+        if (expression == false) {
             throw new IllegalArgumentException(String.format(message, values));
         }
     }

@@ -1,20 +1,25 @@
 package com.taobao.arthas.core.command.monitor200;
 
 import com.taobao.arthas.core.command.Constants;
-import com.taobao.arthas.core.command.model.JvmModel;
 import com.taobao.arthas.core.shell.command.AnnotatedCommand;
 import com.taobao.arthas.core.shell.command.CommandProcess;
+import com.taobao.arthas.core.util.StringUtils;
+import com.taobao.arthas.core.util.affect.RowAffect;
 import com.taobao.middleware.cli.annotations.Description;
 import com.taobao.middleware.cli.annotations.Name;
 import com.taobao.middleware.cli.annotations.Summary;
+import com.taobao.text.Decoration;
+import com.taobao.text.ui.Element;
+import com.taobao.text.ui.TableElement;
+import com.taobao.text.util.RenderUtil;
 
 import java.lang.management.*;
 import java.lang.reflect.Method;
 import java.text.SimpleDateFormat;
 import java.util.Collection;
 import java.util.Date;
-import java.util.LinkedHashMap;
-import java.util.Map;
+
+import static com.taobao.text.ui.Element.label;
 
 /**
  * JVM info command
@@ -38,41 +43,50 @@ public class JvmCommand extends AnnotatedCommand {
 
     @Override
     public void process(CommandProcess process) {
-
-        JvmModel jvmModel = new JvmModel();
-
-        addRuntimeInfo(jvmModel);
-
-        addClassLoading(jvmModel);
-
-        addCompilation(jvmModel);
+        RowAffect affect = new RowAffect();
+        TableElement table = new TableElement(2, 5).leftCellPadding(1).rightCellPadding(1);
+        table.row(true, label("RUNTIME").style(Decoration.bold.bold()));
+        drawRuntimeTable(table);
+        table.row("", "");
+        table.row(true, label("CLASS-LOADING").style(Decoration.bold.bold()));
+        drawClassLoadingTable(table);
+        table.row("", "");
+        table.row(true, label("COMPILATION").style(Decoration.bold.bold()));
+        drawCompilationTable(table);
 
         if (!garbageCollectorMXBeans.isEmpty()) {
-            addGarbageCollectors(jvmModel);
+            table.row("", "");
+            table.row(true, label("GARBAGE-COLLECTORS").style(Decoration.bold.bold()));
+            drawGarbageCollectorsTable(table);
         }
 
         if (!memoryManagerMXBeans.isEmpty()) {
-            addMemoryManagers(jvmModel);
+            table.row("", "");
+            table.row(true, label("MEMORY-MANAGERS").style(Decoration.bold.bold()));
+            drawMemoryManagersTable(table);
         }
 
-        addMemory(jvmModel);
-
-        addOperatingSystem(jvmModel);
-
-        addThread(jvmModel);
-
-        addFileDescriptor(jvmModel);
-
-        process.appendResult(jvmModel);
+        table.row("", "");
+        table.row(true, label("MEMORY").style(Decoration.bold.bold()));
+        drawMemoryTable(table);
+        table.row("", "");
+        table.row(true, label("OPERATING-SYSTEM").style(Decoration.bold.bold()));
+        drawOperatingSystemMXBeanTable(table);
+        table.row("", "");
+        table.row(true, label("THREAD").style(Decoration.bold.bold()));
+        drawThreadTable(table);
+        table.row("", "");
+        table.row(true, label("FILE-DESCRIPTOR").style(Decoration.bold.bold()));
+        drawFileDescriptorTable(table);
+        process.write(RenderUtil.render(table, process.width()));
+        process.write(affect.toString()).write("\n");
         process.end();
     }
 
-    private void addFileDescriptor(JvmModel jvmModel) {
-        String group = "FILE-DESCRIPTOR";
-        jvmModel.addItem(group,"MAX-FILE-DESCRIPTOR-COUNT", invokeFileDescriptor(operatingSystemMXBean, "getMaxFileDescriptorCount"))
-                .addItem(group,"OPEN-FILE-DESCRIPTOR-COUNT", invokeFileDescriptor(operatingSystemMXBean, "getOpenFileDescriptorCount"));
+    private void drawFileDescriptorTable(TableElement table) {
+        table.row("MAX-FILE-DESCRIPTOR-COUNT", "" + invokeFileDescriptor(operatingSystemMXBean, "getMaxFileDescriptorCount"))
+                .row("OPEN-FILE-DESCRIPTOR-COUNT", "" + invokeFileDescriptor(operatingSystemMXBean, "getOpenFileDescriptorCount"));
     }
-
     private long invokeFileDescriptor(OperatingSystemMXBean os, String name) {
         try {
             final Method method = os.getClass().getDeclaredMethod(name);
@@ -82,114 +96,137 @@ public class JvmCommand extends AnnotatedCommand {
             return -1;
         }
     }
+    private String toCol(Collection<String> strings) {
+        final StringBuilder colSB = new StringBuilder();
+        if (strings.isEmpty()) {
+            colSB.append("[]");
+        } else {
+            for (String str : strings) {
+                colSB.append(str).append("\n");
+            }
+        }
+        return colSB.toString();
+    }
 
-    private void addRuntimeInfo(JvmModel jvmModel) {
+    private String toCol(String... stringArray) {
+        final StringBuilder colSB = new StringBuilder();
+        if (null == stringArray
+                || stringArray.length == 0) {
+            colSB.append("[]");
+        } else {
+            for (String str : stringArray) {
+                colSB.append(str).append("\n");
+            }
+        }
+        return colSB.toString();
+    }
+
+    private Element drawRuntimeTable(TableElement table) {
         String bootClassPath = "";
         try {
             bootClassPath = runtimeMXBean.getBootClassPath();
         } catch (Exception e) {
             // under jdk9 will throw UnsupportedOperationException, ignore
         }
-        String group = "RUNTIME";
-        jvmModel.addItem(group,"MACHINE-NAME", runtimeMXBean.getName());
-        jvmModel.addItem(group, "JVM-START-TIME", new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date(runtimeMXBean.getStartTime())));
-        jvmModel.addItem(group, "MANAGEMENT-SPEC-VERSION", runtimeMXBean.getManagementSpecVersion());
-        jvmModel.addItem(group, "SPEC-NAME", runtimeMXBean.getSpecName());
-        jvmModel.addItem(group, "SPEC-VENDOR", runtimeMXBean.getSpecVendor());
-        jvmModel.addItem(group, "SPEC-VERSION", runtimeMXBean.getSpecVersion());
-        jvmModel.addItem(group, "VM-NAME", runtimeMXBean.getVmName());
-        jvmModel.addItem(group, "VM-VENDOR", runtimeMXBean.getVmVendor());
-        jvmModel.addItem(group, "VM-VERSION", runtimeMXBean.getVmVersion());
-        jvmModel.addItem(group, "INPUT-ARGUMENTS", runtimeMXBean.getInputArguments());
-        jvmModel.addItem(group, "CLASS-PATH", runtimeMXBean.getClassPath());
-        jvmModel.addItem(group, "BOOT-CLASS-PATH", bootClassPath);
-        jvmModel.addItem(group, "LIBRARY-PATH", runtimeMXBean.getLibraryPath());
+        table.row("MACHINE-NAME", runtimeMXBean.getName())
+                .row("JVM-START-TIME", new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date(runtimeMXBean.getStartTime())))
+                .row("MANAGEMENT-SPEC-VERSION", runtimeMXBean.getManagementSpecVersion())
+                .row("SPEC-NAME", runtimeMXBean.getSpecName())
+                .row("SPEC-VENDOR", runtimeMXBean.getSpecVendor())
+                .row("SPEC-VERSION", runtimeMXBean.getSpecVersion())
+                .row("VM-NAME", runtimeMXBean.getVmName())
+                .row("VM-VENDOR", runtimeMXBean.getVmVendor())
+                .row("VM-VERSION", runtimeMXBean.getVmVersion())
+                .row("INPUT-ARGUMENTS", toCol(runtimeMXBean.getInputArguments()))
+                .row("CLASS-PATH", runtimeMXBean.getClassPath())
+                .row("BOOT-CLASS-PATH", bootClassPath)
+                .row("LIBRARY-PATH", runtimeMXBean.getLibraryPath());
+
+        return table;
     }
 
-    private void addClassLoading(JvmModel jvmModel) {
-        String group = "CLASS-LOADING";
-        jvmModel.addItem(group, "LOADED-CLASS-COUNT", classLoadingMXBean.getLoadedClassCount());
-        jvmModel.addItem(group, "TOTAL-LOADED-CLASS-COUNT", classLoadingMXBean.getTotalLoadedClassCount());
-        jvmModel.addItem(group, "UNLOADED-CLASS-COUNT", classLoadingMXBean.getUnloadedClassCount());
-        jvmModel.addItem(group, "IS-VERBOSE", classLoadingMXBean.isVerbose());
+    private Element drawClassLoadingTable(TableElement table) {
+        table.row("LOADED-CLASS-COUNT", "" + classLoadingMXBean.getLoadedClassCount())
+                .row("TOTAL-LOADED-CLASS-COUNT", "" + classLoadingMXBean.getTotalLoadedClassCount())
+                .row("UNLOADED-CLASS-COUNT", "" + classLoadingMXBean.getUnloadedClassCount())
+                .row("IS-VERBOSE", "" + classLoadingMXBean.isVerbose());
+
+        return table;
     }
 
-    private void addCompilation(JvmModel jvmModel) {
-        if (compilationMXBean == null) {
-            return;
-        }
-        String group = "COMPILATION";
-        jvmModel.addItem(group, "NAME", compilationMXBean.getName());
+    private Element drawCompilationTable(TableElement table) {
+        table.row("NAME", compilationMXBean.getName());
+
         if (compilationMXBean.isCompilationTimeMonitoringSupported()) {
-            jvmModel.addItem(group, "TOTAL-COMPILE-TIME", compilationMXBean.getTotalCompilationTime(), "time (ms)");
+            table.row("TOTAL-COMPILE-TIME", compilationMXBean.getTotalCompilationTime() + "(ms)");
+
         }
+        return table;
     }
 
-    private void addGarbageCollectors(JvmModel jvmModel) {
-        String group = "GARBAGE-COLLECTORS";
-        for (GarbageCollectorMXBean gcMXBean : garbageCollectorMXBeans) {
-            Map<String, Object> gcInfo = new LinkedHashMap<String, Object>();
-            gcInfo.put("name", gcMXBean.getName());
-            gcInfo.put("collectionCount", gcMXBean.getCollectionCount());
-            gcInfo.put("collectionTime", gcMXBean.getCollectionTime());
-
-            jvmModel.addItem(group, gcMXBean.getName(), gcInfo, "count/time (ms)");
+    private Element drawGarbageCollectorsTable(TableElement table) {
+        for (GarbageCollectorMXBean garbageCollectorMXBean : garbageCollectorMXBeans) {
+            table.row(garbageCollectorMXBean.getName() + "\n[count/time]",
+                    garbageCollectorMXBean.getCollectionCount() + "/" + garbageCollectorMXBean.getCollectionTime() + "(ms)");
         }
+
+        return table;
     }
 
-    private void addMemoryManagers(JvmModel jvmModel) {
-        String group = "MEMORY-MANAGERS";
+    private Element drawMemoryManagersTable(TableElement table) {
         for (final MemoryManagerMXBean memoryManagerMXBean : memoryManagerMXBeans) {
             if (memoryManagerMXBean.isValid()) {
                 final String name = memoryManagerMXBean.isValid()
                         ? memoryManagerMXBean.getName()
                         : memoryManagerMXBean.getName() + "(Invalid)";
-                jvmModel.addItem(group, name, memoryManagerMXBean.getMemoryPoolNames());
+
+
+                table.row(name, toCol(memoryManagerMXBean.getMemoryPoolNames()));
             }
         }
+
+        return table;
     }
 
-    private void addMemory(JvmModel jvmModel) {
-        String group = "MEMORY";
+    private Element drawMemoryTable(TableElement table) {
         MemoryUsage heapMemoryUsage = memoryMXBean.getHeapMemoryUsage();
-        Map<String, Object> heapMemoryInfo = getMemoryUsageInfo("heap", heapMemoryUsage);
-        jvmModel.addItem(group, "HEAP-MEMORY-USAGE", heapMemoryInfo, "memory in bytes");
-
+        table.row("HEAP-MEMORY-USAGE\n[committed/init/max/used]",
+                formatMemoryByte(heapMemoryUsage.getCommitted())
+                        + "/" + formatMemoryByte(heapMemoryUsage.getInit())
+                        + "/" + formatMemoryByte(heapMemoryUsage.getMax())
+                        + "/" + formatMemoryByte(heapMemoryUsage.getUsed())
+        );
         MemoryUsage nonHeapMemoryUsage = memoryMXBean.getNonHeapMemoryUsage();
-        Map<String, Object> nonheapMemoryInfo = getMemoryUsageInfo("nonheap", nonHeapMemoryUsage);
-        jvmModel.addItem(group,"NO-HEAP-MEMORY-USAGE", nonheapMemoryInfo, "memory in bytes");
+        table.row("NO-HEAP-MEMORY-USAGE\n[committed/init/max/used]",
+                formatMemoryByte(nonHeapMemoryUsage.getCommitted())
+                        + "/" + formatMemoryByte(nonHeapMemoryUsage.getInit())
+                        + "/" + formatMemoryByte(nonHeapMemoryUsage.getMax())
+                        + "/" + formatMemoryByte(nonHeapMemoryUsage.getUsed())
+        );
 
-        jvmModel.addItem(group,"PENDING-FINALIZE-COUNT", memoryMXBean.getObjectPendingFinalizationCount());
+        table.row("PENDING-FINALIZE-COUNT", "" + memoryMXBean.getObjectPendingFinalizationCount());
+        return table;
+    }
+    private String formatMemoryByte(long bytes){
+        return String.format("%s(%s)",bytes, StringUtils.humanReadableByteCount(bytes));
     }
 
-    private Map<String, Object> getMemoryUsageInfo(String name, MemoryUsage heapMemoryUsage) {
-        Map<String, Object> memoryInfo = new LinkedHashMap<String, Object>();
-        memoryInfo.put("name", name);
-        memoryInfo.put("init", heapMemoryUsage.getInit());
-        memoryInfo.put("used", heapMemoryUsage.getUsed());
-        memoryInfo.put("committed", heapMemoryUsage.getCommitted());
-        memoryInfo.put("max", heapMemoryUsage.getMax());
-        return memoryInfo;
+    private Element drawOperatingSystemMXBeanTable(TableElement table) {
+        table.row("OS", operatingSystemMXBean.getName()).row("ARCH", operatingSystemMXBean.getArch())
+                .row("PROCESSORS-COUNT", "" + operatingSystemMXBean.getAvailableProcessors())
+                .row("LOAD-AVERAGE", "" + operatingSystemMXBean.getSystemLoadAverage())
+                .row("VERSION", operatingSystemMXBean.getVersion());
+        return table;
     }
 
-    private void addOperatingSystem(JvmModel jvmModel) {
-        String group = "OPERATING-SYSTEM";
-        jvmModel.addItem(group,"OS", operatingSystemMXBean.getName())
-                .addItem(group,"ARCH", operatingSystemMXBean.getArch())
-                .addItem(group,"PROCESSORS-COUNT", operatingSystemMXBean.getAvailableProcessors())
-                .addItem(group,"LOAD-AVERAGE", operatingSystemMXBean.getSystemLoadAverage())
-                .addItem(group,"VERSION", operatingSystemMXBean.getVersion());
+    private Element drawThreadTable(TableElement table) {
+        table.row("COUNT", "" + threadMXBean.getThreadCount())
+                .row("DAEMON-COUNT", "" + threadMXBean.getDaemonThreadCount())
+                .row("PEAK-COUNT", "" + threadMXBean.getPeakThreadCount())
+                .row("STARTED-COUNT", "" + threadMXBean.getTotalStartedThreadCount())
+                .row("DEADLOCK-COUNT","" + getDeadlockedThreadsCount(threadMXBean));
+        return table;
     }
-
-    private void addThread(JvmModel jvmModel) {
-        String group = "THREAD";
-        jvmModel.addItem(group, "COUNT", threadMXBean.getThreadCount())
-                .addItem(group, "DAEMON-COUNT", threadMXBean.getDaemonThreadCount())
-                .addItem(group, "PEAK-COUNT", threadMXBean.getPeakThreadCount())
-                .addItem(group, "STARTED-COUNT", threadMXBean.getTotalStartedThreadCount())
-                .addItem(group, "DEADLOCK-COUNT",getDeadlockedThreadsCount(threadMXBean));
-    }
-
     private int getDeadlockedThreadsCount(ThreadMXBean threads) {
         final long[] ids = threads.findDeadlockedThreads();
         if (ids == null) {

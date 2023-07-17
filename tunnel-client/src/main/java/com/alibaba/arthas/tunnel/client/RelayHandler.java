@@ -1,8 +1,5 @@
 package com.alibaba.arthas.tunnel.client;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import io.netty.buffer.Unpooled;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandlerContext;
@@ -10,7 +7,7 @@ import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.util.ReferenceCountUtil;
 
 public final class RelayHandler extends ChannelInboundHandlerAdapter {
-    private final static Logger logger = LoggerFactory.getLogger(RelayHandler.class);
+
     private final Channel relayChannel;
 
     public RelayHandler(Channel relayChannel) {
@@ -40,13 +37,7 @@ public final class RelayHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-        logger.error("RelayHandler error", cause);
-        try {
-            if (relayChannel.isActive()) {
-                relayChannel.close();
-            }
-        } finally {
-            ctx.close();
-        }
+        cause.printStackTrace();
+        ctx.close();
     }
 }

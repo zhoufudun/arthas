@@ -79,7 +79,8 @@ public class ClassInfoView implements View {
         final StringBuilder fieldSB = new StringBuilder();
 
         final Field[] fields = clazz.getDeclaredFields();
-        if (fields.length > 0) {
+        if (null != fields
+                && fields.length > 0) {
 
             for (Field field : fields) {
 
@@ -127,7 +128,7 @@ public class ClassInfoView implements View {
         final StringBuilder annotationSB = new StringBuilder();
         final Annotation[] annotationArray = clazz.getDeclaredAnnotations();
 
-        if (annotationArray.length > 0) {
+        if (null != annotationArray && annotationArray.length > 0) {
             for (Annotation annotation : annotationArray) {
                 annotationSB.append(StringUtils.classname(annotation.annotationType())).append(",");
             }
@@ -144,7 +145,7 @@ public class ClassInfoView implements View {
     private String drawInterface() {
         final StringBuilder interfaceSB = new StringBuilder();
         final Class<?>[] interfaceArray = clazz.getInterfaces();
-        if (interfaceArray.length == 0) {
+        if (null == interfaceArray || interfaceArray.length == 0) {
             interfaceSB.append(Constants.EMPTY_STRING);
         } else {
             for (Class<?> i : interfaceArray) {

@@ -10,49 +10,23 @@ import java.util.Map;
 import static java.lang.reflect.Modifier.isStatic;
 
 /**
- * <pre>
- * 配置类。
- * 注意本类里的所有字段不能有默认值，否则会出现配置混乱。
- * 在 com.taobao.arthas.core.Arthas#attach 里会调用 Configure#toStrig
- * <pre>
+ * 配置类
  *
  * @author vlinux
  * @author hengyunabc 2018-11-12
  */
-@Config(prefix = "arthas")
 public class Configure {
-
+    public static final long DEFAULT_SESSION_TIMEOUT_SECONDS = ShellServerOptions.DEFAULT_SESSION_TIMEOUT/1000;
     private String ip;
-    private Integer telnetPort;
-    private Integer httpPort;
-    private Long javaPid;
+    private int telnetPort;
+    private int httpPort;
+    private int javaPid;
     private String arthasCore;
     private String arthasAgent;
 
     private String tunnelServer;
     private String agentId;
 
-    private String username;
-    private String password;
-
-    /**
-     * @see com.taobao.arthas.common.ArthasConstants#ARTHAS_OUTPUT
-     */
-    private String outputPath;
-
-    /**
-     * 需要被增强的ClassLoader的全类名，多个用英文 , 分隔
-     */
-    private String enhanceLoaders;
-
-    /**
-     * <pre>
-     * 1. 如果显式传入 arthas.agentId ，则直接使用
-     * 2. 如果用户没有指定，则自动尝试在查找应用的 appname，加为前缀，比如 system properties设置 project.name是 demo，则
-     *    生成的 agentId是  demo-xxxx
-     * </pre>
-     */
-    private String appName;
     /**
      * report executed command
      */
@@ -60,19 +34,8 @@ public class Configure {
 
     /**
      * session timeout seconds
-     * @see ShellServerOptions#DEFAULT_SESSION_TIMEOUT
      */
-    private Long sessionTimeout;
-
-    /**
-     * disabled commands
-     */
-    private String disabledCommands;
-
-    /**
-     * 本地连接不需要鉴权，即使配置了password。arthas.properties 里默认为true
-     */
-    private Boolean localConnectionNonAuth;
+    private long sessionTimeout = DEFAULT_SESSION_TIMEOUT_SECONDS;
 
     public String getIp() {
         return ip;
@@ -82,7 +45,7 @@ public class Configure {
         this.ip = ip;
     }
 
-    public Integer getTelnetPort() {
+    public int getTelnetPort() {
         return telnetPort;
     }
 
@@ -94,15 +57,15 @@ public class Configure {
         this.httpPort = httpPort;
     }
 
-    public Integer getHttpPort() {
+    public int getHttpPort() {
         return httpPort;
     }
 
-    public long getJavaPid() {
+    public int getJavaPid() {
         return javaPid;
     }
 
-    public void setJavaPid(long javaPid) {
+    public void setJavaPid(int javaPid) {
         this.javaPid = javaPid;
     }
 
@@ -122,7 +85,7 @@ public class Configure {
         this.arthasCore = arthasCore;
     }
 
-    public Long getSessionTimeout() {
+    public long getSessionTimeout() {
         return sessionTimeout;
     }
 
@@ -154,61 +117,8 @@ public class Configure {
         this.statUrl = statUrl;
     }
 
-    public String getAppName() {
-        return appName;
-    }
-
-    public void setAppName(String appName) {
-        this.appName = appName;
-    }
-
-    public String getEnhanceLoaders() {
-        return enhanceLoaders;
-    }
-
-    public void setEnhanceLoaders(String enhanceLoaders) {
-        this.enhanceLoaders = enhanceLoaders;
-    }
-
-    public String getOutputPath() {
-        return outputPath;
-    }
-
-    public void setOutputPath(String outputPath) {
-        this.outputPath = outputPath;
-    }
-
-    public String getUsername() {
-        return username;
-    }
-
-    public void setUsername(String username) {
-        this.username = username;
-    }
-
-    public String getPassword() {
-        return password;
-    }
-
-    public void setPassword(String password) {
-        this.password = password;
-    }
-
-    public String getDisabledCommands() {
-        return disabledCommands;
-    }
-
-    public void setDisabledCommands(String disabledCommands) {
-        this.disabledCommands = disabledCommands;
-    }
-
-    public boolean isLocalConnectionNonAuth() {
-        return localConnectionNonAuth != null && localConnectionNonAuth;
-    }
-
-    public void setLocalConnectionNonAuth(boolean localConnectionNonAuth) {
-        this.localConnectionNonAuth = localConnectionNonAuth;
-    }
+    // 对象的编码解码器
+    private final static FeatureCodec codec = new FeatureCodec(';', '=');
 
     /**
      * 序列化成字符串
@@ -238,7 +148,7 @@ public class Configure {
 
         }
 
-        return FeatureCodec.DEFAULT_COMMANDLINE_CODEC.toString(map);
+        return codec.toString(map);
     }
 
     /**
@@ -249,7 +159,7 @@ public class Configure {
      */
     public static Configure toConfigure(String toString) throws IllegalAccessException {
         final Configure configure = new Configure();
-        final Map<String, String> map = FeatureCodec.DEFAULT_COMMANDLINE_CODEC.toMap(toString);
+        final Map<String, String> map = codec.toMap(toString);
 
         for (Map.Entry<String, String> entry : map.entrySet()) {
             final Field field = ArthasReflectUtils.getField(Configure.class, entry.getKey());

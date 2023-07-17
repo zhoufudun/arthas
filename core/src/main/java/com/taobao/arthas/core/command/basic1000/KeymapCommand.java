@@ -1,15 +1,15 @@
 package com.taobao.arthas.core.command.basic1000;
 
-import com.alibaba.arthas.deps.org.slf4j.Logger;
-import com.alibaba.arthas.deps.org.slf4j.LoggerFactory;
 import com.taobao.arthas.common.IOUtils;
 import com.taobao.arthas.core.command.Constants;
 import com.taobao.arthas.core.shell.command.AnnotatedCommand;
 import com.taobao.arthas.core.shell.command.CommandProcess;
 import com.taobao.arthas.core.shell.term.impl.Helper;
+import com.taobao.arthas.core.util.LogUtil;
 import com.taobao.middleware.cli.annotations.Description;
 import com.taobao.middleware.cli.annotations.Name;
 import com.taobao.middleware.cli.annotations.Summary;
+import com.taobao.middleware.logger.Logger;
 import com.taobao.text.Decoration;
 import com.taobao.text.ui.TableElement;
 import com.taobao.text.util.RenderUtil;
@@ -31,15 +31,10 @@ import java.io.InputStreamReader;
 @Summary("Display all the available keymap for the specified connection.")
 @Description(Constants.WIKI + Constants.WIKI_HOME + "keymap")
 public class KeymapCommand extends AnnotatedCommand {
-    private static final Logger logger = LoggerFactory.getLogger(KeymapCommand.class);
+    private static final Logger logger = LogUtil.getArthasLogger();
 
     @Override
     public void process(CommandProcess process) {
-        if (!process.session().isTty()) {
-            process.end(-1, "Command 'keymap' is only support tty session.");
-            return;
-        }
-
         InputStream inputrc = Helper.loadInputRcFile();
         try {
             TableElement table = new TableElement(1, 1, 2).leftCellPadding(1).rightCellPadding(1);
@@ -55,7 +50,7 @@ public class KeymapCommand extends AnnotatedCommand {
                     continue;
                 }
                 String[] strings = line.split(":");
-                if (strings.length == 2) {
+                if (strings != null && strings.length == 2) {
                     table.row(strings[0], translate(strings[0]), strings[1]);
                 } else {
                     table.row(line);
@@ -64,7 +59,7 @@ public class KeymapCommand extends AnnotatedCommand {
             }
             process.write(RenderUtil.render(table, process.width()));
         } catch (IOException e) {
-            logger.error("read inputrc file error.", e);
+            logger.error("keymap", "read inputrc file error.", e);
         } finally {
             IOUtils.close(inputrc);
             process.end();

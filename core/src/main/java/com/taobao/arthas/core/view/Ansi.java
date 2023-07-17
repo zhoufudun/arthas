@@ -59,6 +59,8 @@ public class Ansi {
         }
     }
 
+    ;
+
     public static enum Attribute {
         RESET(0, "RESET"),
         INTENSITY_BOLD(1, "INTENSITY_BOLD"),
@@ -98,6 +100,8 @@ public class Ansi {
 
     }
 
+    ;
+
     public static enum Erase {
         FORWARD(0, "FORWARD"),
         BACKWARD(1, "BACKWARD"),
@@ -120,6 +124,8 @@ public class Ansi {
             return value;
         }
     }
+
+    ;
 
     public static final String DISABLE = Ansi.class.getName() + ".disable";
 

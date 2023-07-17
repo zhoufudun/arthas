@@ -1,6 +1,5 @@
 package com.taobao.arthas.core.command.basic1000;
 
-import com.taobao.arthas.core.command.model.SessionModel;
 import com.taobao.arthas.core.server.ArthasBootstrap;
 import com.taobao.arthas.core.shell.command.AnnotatedCommand;
 import com.taobao.arthas.core.shell.command.CommandProcess;
@@ -8,6 +7,12 @@ import com.taobao.arthas.core.shell.session.Session;
 import com.taobao.arthas.core.util.UserStatUtil;
 import com.taobao.middleware.cli.annotations.Name;
 import com.taobao.middleware.cli.annotations.Summary;
+import com.taobao.text.Decoration;
+import com.taobao.text.ui.Element;
+import com.taobao.text.ui.TableElement;
+import com.taobao.text.util.RenderUtil;
+
+import static com.taobao.text.ui.Element.label;
 
 import com.alibaba.arthas.tunnel.client.TunnelClient;
 
@@ -19,31 +24,30 @@ import com.alibaba.arthas.tunnel.client.TunnelClient;
 @Name("session")
 @Summary("Display current session information")
 public class SessionCommand extends AnnotatedCommand {
-
     @Override
     public void process(CommandProcess process) {
-        SessionModel result = new SessionModel();
-        Session session = process.session();
-        result.setJavaPid(session.getPid());
-        result.setSessionId(session.getSessionId());
+        process.write(RenderUtil.render(sessionTable(process.session()), process.width())).end();
+    }
 
-        //tunnel
+    /*
+     * 会话详情
+     */
+    private Element sessionTable(Session session) {
+        TableElement table = new TableElement().leftCellPadding(1).rightCellPadding(1);
+        table.row(true, label("Name").style(Decoration.bold.bold()), label("Value").style(Decoration.bold.bold()));
+        table.row("JAVA_PID", "" + session.getPid()).row("SESSION_ID", "" + session.getSessionId());
         TunnelClient tunnelClient = ArthasBootstrap.getInstance().getTunnelClient();
         if (tunnelClient != null) {
             String id = tunnelClient.getId();
             if (id != null) {
-                result.setAgentId(id);
+                table.row("AGENT_ID", "" + id);
             }
-            result.setTunnelServer(tunnelClient.getTunnelServerUrl());
-            result.setTunnelConnected(tunnelClient.isConnected());
+            table.row("TUNNEL_SERVER", "" + tunnelClient.getTunnelServerUrl());
         }
-
-        //statUrl
         String statUrl = UserStatUtil.getStatUrl();
-        result.setStatUrl(statUrl);
-
-        process.appendResult(result);
-        process.end();
+        if (statUrl != null) {
+            table.row("STAT_URL", statUrl);
+        }
+        return table;
     }
-
 }

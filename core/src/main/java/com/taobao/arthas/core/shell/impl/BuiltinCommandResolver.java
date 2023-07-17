@@ -21,7 +21,7 @@ class BuiltinCommandResolver implements CommandResolver {
     private Handler<CommandProcess> handler;
 
     public BuiltinCommandResolver() {
-        this.handler = new NoOpHandler<CommandProcess>();
+        this.handler = new NoOpHandler();
     }
 
     @Override

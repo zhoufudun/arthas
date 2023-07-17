@@ -6,19 +6,17 @@ import java.lang.management.ManagementFactory;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
-import com.alibaba.arthas.deps.org.slf4j.Logger;
-import com.alibaba.arthas.deps.org.slf4j.LoggerFactory;
 import com.sun.management.HotSpotDiagnosticMXBean;
 import com.taobao.arthas.core.command.Constants;
-import com.taobao.arthas.core.command.model.HeapDumpModel;
-import com.taobao.arthas.core.command.model.MessageModel;
 import com.taobao.arthas.core.shell.command.AnnotatedCommand;
 import com.taobao.arthas.core.shell.command.CommandProcess;
+import com.taobao.arthas.core.util.LogUtil;
 import com.taobao.middleware.cli.annotations.Argument;
 import com.taobao.middleware.cli.annotations.Description;
 import com.taobao.middleware.cli.annotations.Name;
 import com.taobao.middleware.cli.annotations.Option;
 import com.taobao.middleware.cli.annotations.Summary;
+import com.taobao.middleware.logger.Logger;
 
 /**
  * HeapDump command
@@ -31,7 +29,7 @@ import com.taobao.middleware.cli.annotations.Summary;
 @Description("\nExamples:\n" + "  heapdump\n" + "  heapdump --live\n" + "  heapdump --live /tmp/dump.hprof\n"
                 + Constants.WIKI + Constants.WIKI_HOME + "heapdump")
 public class HeapDumpCommand extends AnnotatedCommand {
-    private static final Logger logger = LoggerFactory.getLogger(HeapDumpCommand.class);
+    private static final Logger logger = LogUtil.getArthasLogger();
     private String file;
 
     private boolean live;
@@ -50,6 +48,7 @@ public class HeapDumpCommand extends AnnotatedCommand {
 
     @Override
     public void process(CommandProcess process) {
+        int status = 0;
         try {
             String dumpFile = file;
             if (dumpFile == null || dumpFile.isEmpty()) {
@@ -59,17 +58,18 @@ public class HeapDumpCommand extends AnnotatedCommand {
                 file.delete();
             }
 
-            process.appendResult(new MessageModel("Dumping heap to " + dumpFile + " ..."));
+            process.write("Dumping heap to " + dumpFile + "...\n");
 
             run(process, dumpFile, live);
 
-            process.appendResult(new MessageModel("Heap dump file created"));
-            process.appendResult(new HeapDumpModel(dumpFile, live));
-            process.end();
+            process.write("Heap dump file created\n");
+
         } catch (Throwable t) {
-            String errorMsg = "heap dump error: " + t.getMessage();
-            logger.error(errorMsg, t);
-            process.end(-1, errorMsg);
+            logger.error("arthas", "heap dump error", t);
+            process.write("Heap dump error: " + t.getMessage() + '\n');
+            status = 1;
+        } finally {
+            process.end(status);
         }
 
     }

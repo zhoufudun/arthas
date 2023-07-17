@@ -2,7 +2,6 @@ package com.taobao.arthas.core.command.monitor200;
 
 import java.util.Arrays;
 
-import com.taobao.arthas.core.GlobalOptions;
 import com.taobao.arthas.core.advisor.AdviceListener;
 import com.taobao.arthas.core.command.Constants;
 import com.taobao.arthas.core.shell.cli.Completion;
@@ -10,9 +9,7 @@ import com.taobao.arthas.core.shell.cli.CompletionUtils;
 import com.taobao.arthas.core.shell.command.CommandProcess;
 import com.taobao.arthas.core.util.SearchUtils;
 import com.taobao.arthas.core.util.matcher.Matcher;
-import com.taobao.arthas.core.view.ObjectView;
 import com.taobao.middleware.cli.annotations.Argument;
-import com.taobao.middleware.cli.annotations.DefaultValue;
 import com.taobao.middleware.cli.annotations.Description;
 import com.taobao.middleware.cli.annotations.Name;
 import com.taobao.middleware.cli.annotations.Option;
@@ -21,15 +18,14 @@ import com.taobao.middleware.cli.annotations.Summary;
 @Name("watch")
 @Summary("Display the input/output parameter, return object, and thrown exception of specified method invocation")
 @Description(Constants.EXPRESS_DESCRIPTION + "\nExamples:\n" +
-        "  watch org.apache.commons.lang.StringUtils isBlank\n" +
-        "  watch org.apache.commons.lang.StringUtils isBlank '{params, target, returnObj, throwExp}' -x 2\n" +
+        "  watch -b org.apache.commons.lang.StringUtils isBlank params\n" +
+        "  watch -f org.apache.commons.lang.StringUtils isBlank returnObj\n" +
+        "  watch org.apache.commons.lang.StringUtils isBlank '{params, target, returnObj}' -x 2\n" +
+        "  watch -bf *StringUtils isBlank params\n" +
+        "  watch *StringUtils isBlank params[0]\n" +
         "  watch *StringUtils isBlank params[0] params[0].length==1\n" +
         "  watch *StringUtils isBlank params '#cost>100'\n" +
-        "  watch -f *StringUtils isBlank params\n" +
-        "  watch *StringUtils isBlank params[0]\n" +
         "  watch -E -b org\\.apache\\.commons\\.lang\\.StringUtils isBlank params[0]\n" +
-        "  watch javax.servlet.Filter * --exclude-class-pattern com.demo.TestFilter\n" +
-        "  watch OuterClass$InnerClass\n" +
         Constants.WIKI + Constants.WIKI_HOME + "watch")
 public class WatchCommand extends EnhancerCommand {
 
@@ -45,7 +41,7 @@ public class WatchCommand extends EnhancerCommand {
     private Integer sizeLimit = 10 * 1024 * 1024;
     private boolean isRegEx = false;
     private int numberOfLimit = 100;
-    
+
     @Argument(index = 0, argName = "class-pattern")
     @Description("The full qualified class name you want to watch")
     public void setClassPattern(String classPattern) {
@@ -58,9 +54,8 @@ public class WatchCommand extends EnhancerCommand {
         this.methodPattern = methodPattern;
     }
 
-    @Argument(index = 2, argName = "express", required = false)
-    @DefaultValue("{params, target, returnObj}")
-    @Description("The content you want to watch, written by ognl. Default value is '{params, target, returnObj}'\n" + Constants.EXPRESS_EXAMPLES)
+    @Argument(index = 2, argName = "express")
+    @Description("the content you want to watch, written by ognl.\n" + Constants.EXPRESS_EXAMPLES)
     public void setExpress(String express) {
         this.express = express;
     }
@@ -102,7 +97,7 @@ public class WatchCommand extends EnhancerCommand {
     }
 
     @Option(shortName = "x", longName = "expand")
-    @Description("Expand level of object (1 by default), the max value is " + ObjectView.MAX_DEEP)
+    @Description("Expand level of object (1 by default)")
     public void setExpand(Integer expand) {
         this.expand = expand;
     }
@@ -176,14 +171,6 @@ public class WatchCommand extends EnhancerCommand {
     }
 
     @Override
-    protected Matcher getClassNameExcludeMatcher() {
-        if (classNameExcludeMatcher == null && getExcludeClassPattern() != null) {
-            classNameExcludeMatcher = SearchUtils.classNameMatcher(getExcludeClassPattern(), isRegEx());
-        }
-        return classNameExcludeMatcher;
-    }
-
-    @Override
     protected Matcher getMethodNameMatcher() {
         if (methodNameMatcher == null) {
             methodNameMatcher = SearchUtils.classNameMatcher(getMethodPattern(), isRegEx());
@@ -193,7 +180,7 @@ public class WatchCommand extends EnhancerCommand {
 
     @Override
     protected AdviceListener getAdviceListener(CommandProcess process) {
-        return new WatchAdviceListener(this, process, GlobalOptions.verbose || this.verbose);
+        return new WatchAdviceListener(this, process);
     }
 
     @Override

@@ -1,11 +1,11 @@
 package com.taobao.arthas.core.shell.term.impl;
 
-import com.alibaba.arthas.deps.org.slf4j.Logger;
-import com.alibaba.arthas.deps.org.slf4j.LoggerFactory;
 import com.taobao.arthas.core.shell.future.Future;
 import com.taobao.arthas.core.shell.handlers.Handler;
 import com.taobao.arthas.core.shell.term.Term;
 import com.taobao.arthas.core.shell.term.TermServer;
+import com.taobao.arthas.core.util.LogUtil;
+import com.taobao.middleware.logger.Logger;
 import io.termd.core.function.Consumer;
 import io.termd.core.telnet.netty.NettyTelnetTtyBootstrap;
 import io.termd.core.tty.TtyConnection;
@@ -19,7 +19,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class TelnetTermServer extends TermServer {
 
-    private static final Logger logger = LoggerFactory.getLogger(TelnetTermServer.class);
+    private static Logger logger = LogUtil.getArthasLogger();
 
     private NettyTelnetTtyBootstrap bootstrap;
     private String hostIp;
@@ -40,6 +40,12 @@ public class TelnetTermServer extends TermServer {
         return this;
     }
 
+    /**
+     * 命令行服务端
+     *
+     * @param listenHandler the listen handler
+     * @return
+     */
     @Override
     public TermServer listen(Handler<Future<TermServer>> listenHandler) {
         // TODO: charset and inputrc from options
@@ -48,12 +54,19 @@ public class TelnetTermServer extends TermServer {
             bootstrap.start(new Consumer<TtyConnection>() {
                 @Override
                 public void accept(final TtyConnection conn) {
+                    /**
+                     * Helper.loadKeymap()这个类方法主要是在项目目录inputrc文件里加载对应的快捷键以及对应的处理类name标识，
+                     * 返回个映射对象，对命令行界面快捷键指示处理需要。
+                     *
+                     * 在监听到有命令的时候会调用
+                     * com.taobao.arthas.core.shell.handlers.server.TermServerTermHandler#handle(com.taobao.arthas.core.shell.term.Term)
+                     */
                     termHandler.handle(new TermImpl(Helper.loadKeymap(), conn));
                 }
             }).get(connectionTimeout, TimeUnit.MILLISECONDS);
             listenHandler.handle(Future.<TermServer>succeededFuture());
         } catch (Throwable t) {
-            logger.error("Error listening to port " + port, t);
+            logger.error(null, "Error listening to port " + port, t);
             listenHandler.handle(Future.<TermServer>failedFuture(t));
         }
         return this;

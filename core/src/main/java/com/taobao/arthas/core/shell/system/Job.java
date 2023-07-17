@@ -58,11 +58,6 @@ public interface Job {
     Job resume();
 
     /**
-     * @return true if the job is running in background
-     */
-    boolean isRunInBackground();
-
-    /**
      * Send the job to background.
      *
      * @return this object

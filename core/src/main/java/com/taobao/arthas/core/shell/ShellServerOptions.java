@@ -34,7 +34,7 @@ public class ShellServerOptions {
     private long sessionTimeout;
     private long reaperInterval;
     private long connectionTimeout;
-    private long pid;
+    private int pid;
     private Instrumentation instrumentation;
 
     public ShellServerOptions() {
@@ -98,7 +98,7 @@ public class ShellServerOptions {
         return this;
     }
 
-    public ShellServerOptions setPid(long pid) {
+    public ShellServerOptions setPid(int pid) {
         this.pid = pid;
         return this;
     }
@@ -108,7 +108,7 @@ public class ShellServerOptions {
         return this;
     }
 
-    public long getPid() {
+    public int getPid() {
         return pid;
     }
 

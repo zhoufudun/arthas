@@ -9,7 +9,7 @@
 
   <fileSets>
     <fileSet>
-      <directory>../site/docs/.vuepress/dist/</directory>
+      <directory>../site/target/site/sphinx/</directory>
       <includes>
         <include>**/*</include>
       </includes>

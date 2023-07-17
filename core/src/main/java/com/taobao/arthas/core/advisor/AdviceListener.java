@@ -6,8 +6,6 @@ package com.taobao.arthas.core.advisor;
  */
 public interface AdviceListener {
 
-    long id();
-
     /**
      * 监听器创建<br/>
      * 监听器被注册时触发
@@ -23,7 +21,8 @@ public interface AdviceListener {
     /**
      * 前置通知
      *
-     * @param clazz      类
+     * @param loader     类加载器
+     * @param className  类名
      * @param methodName 方法名
      * @param methodDesc 方法描述
      * @param target     目标类实例
@@ -32,13 +31,14 @@ public interface AdviceListener {
      * @throws Throwable 通知过程出错
      */
     void before(
-            Class<?> clazz, String methodName, String methodDesc,
+            ClassLoader loader, String className, String methodName, String methodDesc,
             Object target, Object[] args) throws Throwable;
 
     /**
      * 返回通知
      *
-     * @param clazz        类
+     * @param loader       类加载器
+     * @param className    类名
      * @param methodName   方法名
      * @param methodDesc   方法描述
      * @param target       目标类实例
@@ -49,14 +49,15 @@ public interface AdviceListener {
      * @throws Throwable 通知过程出错
      */
     void afterReturning(
-            Class<?> clazz, String methodName, String methodDesc,
+            ClassLoader loader, String className, String methodName, String methodDesc,
             Object target, Object[] args,
             Object returnObject) throws Throwable;
 
     /**
      * 异常通知
      *
-     * @param clazz      类
+     * @param loader     类加载器
+     * @param className  类名
      * @param methodName 方法名
      * @param methodDesc 方法描述
      * @param target     目标类实例
@@ -66,7 +67,7 @@ public interface AdviceListener {
      * @throws Throwable 通知过程出错
      */
     void afterThrowing(
-            Class<?> clazz, String methodName, String methodDesc,
+            ClassLoader loader, String className, String methodName, String methodDesc,
             Object target, Object[] args,
             Throwable throwable) throws Throwable;
 

@@ -1,21 +1,24 @@
 package com.taobao.arthas.core.command.monitor200;
 
-import com.alibaba.arthas.deps.org.slf4j.Logger;
-import com.alibaba.arthas.deps.org.slf4j.LoggerFactory;
-import com.taobao.arthas.core.advisor.Advice;
-import com.taobao.arthas.core.advisor.AdviceListenerAdapter;
-import com.taobao.arthas.core.advisor.ArthasMethod;
-import com.taobao.arthas.core.command.express.ExpressException;
-import com.taobao.arthas.core.command.model.MonitorModel;
+import com.taobao.arthas.core.advisor.ReflectAdviceListenerAdapter;
 import com.taobao.arthas.core.shell.command.CommandProcess;
-import com.taobao.arthas.core.util.StringUtils;
+import com.taobao.arthas.core.advisor.ArthasMethod;
 import com.taobao.arthas.core.util.ThreadLocalWatch;
+import com.taobao.text.Decoration;
+import com.taobao.text.ui.TableElement;
+import com.taobao.text.util.RenderUtil;
 
-import java.util.*;
+import java.text.DecimalFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Map;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static com.taobao.arthas.core.util.ArthasCheckUtils.isEquals;
+import static com.taobao.text.ui.Element.label;
 
 /**
  * 输出的内容格式为:<br/>
@@ -63,26 +66,18 @@ import static com.taobao.arthas.core.util.ArthasCheckUtils.isEquals;
  *
  * @author beiwei30 on 28/11/2016.
  */
-class MonitorAdviceListener extends AdviceListenerAdapter {
+class MonitorAdviceListener extends ReflectAdviceListenerAdapter {
     // 输出定时任务
     private Timer timer;
-    private static final Logger logger = LoggerFactory.getLogger(MonitorAdviceListener.class);
     // 监控数据
-    private ConcurrentHashMap<Key, AtomicReference<MonitorData>> monitorData = new ConcurrentHashMap<Key, AtomicReference<MonitorData>>();
+    private ConcurrentHashMap<Key, AtomicReference<Data>> monitorData = new ConcurrentHashMap<Key, AtomicReference<Data>>();
     private final ThreadLocalWatch threadLocalWatch = new ThreadLocalWatch();
-    private final ThreadLocal<Boolean> conditionResult = new ThreadLocal<Boolean>() {
-        @Override
-        protected Boolean initialValue() {
-            return true;
-        }
-    };
     private MonitorCommand command;
     private CommandProcess process;
 
-    MonitorAdviceListener(MonitorCommand command, CommandProcess process, boolean verbose) {
+    MonitorAdviceListener(MonitorCommand command, CommandProcess process) {
         this.command = command;
         this.process = process;
-        super.setVerbose(verbose);
     }
 
     @Override
@@ -90,7 +85,7 @@ class MonitorAdviceListener extends AdviceListenerAdapter {
         if (timer == null) {
             timer = new Timer("Timer-for-arthas-monitor-" + process.session().getSessionId(), true);
             timer.scheduleAtFixedRate(new MonitorTimer(monitorData, process, command.getNumberOfLimit()),
-                    0, command.getCycle() * 1000L);
+                    0, command.getCycle() * 1000);
         }
     }
 
@@ -106,61 +101,35 @@ class MonitorAdviceListener extends AdviceListenerAdapter {
     public void before(ClassLoader loader, Class<?> clazz, ArthasMethod method, Object target, Object[] args)
             throws Throwable {
         threadLocalWatch.start();
-        if (!StringUtils.isEmpty(this.command.getConditionExpress()) && command.isBefore()) {
-            Advice advice = Advice.newForBefore(loader, clazz, method, target, args);
-            long cost = threadLocalWatch.cost();
-            this.conditionResult.set(isConditionMet(this.command.getConditionExpress(), advice, cost));
-            //重新计算执行方法的耗时(排除执行condition-express耗时)
-            threadLocalWatch.start();
-        }
     }
 
     @Override
     public void afterReturning(ClassLoader loader, Class<?> clazz, ArthasMethod method, Object target,
                                Object[] args, Object returnObject) throws Throwable {
-        finishing(clazz, method, false, Advice.newForAfterReturning(loader, clazz, method, target, args, returnObject));
+        finishing(clazz, method, false);
     }
 
     @Override
     public void afterThrowing(ClassLoader loader, Class<?> clazz, ArthasMethod method, Object target,
                               Object[] args, Throwable throwable) {
-        finishing(clazz, method, true, Advice.newForAfterThrowing(loader, clazz, method, target, args, throwable));
+        finishing(clazz, method, true);
     }
 
-    private void finishing(Class<?> clazz, ArthasMethod method, boolean isThrowing, Advice advice) {
+    private void finishing(Class<?> clazz, ArthasMethod method, boolean isThrowing) {
         double cost = threadLocalWatch.costInMillis();
-
-        if (command.isBefore()) {
-            if (!this.conditionResult.get()) {
-                return;
-            }
-        } else {
-            try {
-                //不满足condition-express的不纳入统计
-                if (!isConditionMet(this.command.getConditionExpress(), advice, cost)) {
-                    return;
-                }
-            } catch (ExpressException e) {
-                //condition-express执行错误的不纳入统计
-                logger.warn("monitor execute condition-express failed.", e);
-                return;
-            }
-        }
-
         final Key key = new Key(clazz.getName(), method.getName());
 
         while (true) {
-            AtomicReference<MonitorData> value = monitorData.get(key);
+            AtomicReference<Data> value = monitorData.get(key);
             if (null == value) {
-                monitorData.putIfAbsent(key, new AtomicReference<MonitorData>(new MonitorData()));
+                monitorData.putIfAbsent(key, new AtomicReference<Data>(new Data()));
                 continue;
             }
 
             while (true) {
-                MonitorData oData = value.get();
-                MonitorData nData = new MonitorData();
+                Data oData = value.get();
+                Data nData = new Data();
                 nData.setCost(oData.getCost() + cost);
-                nData.setTimestamp(new Date());
                 if (isThrowing) {
                     nData.setFailed(oData.getFailed() + 1);
                     nData.setSuccess(oData.getSuccess());
@@ -178,11 +147,11 @@ class MonitorAdviceListener extends AdviceListenerAdapter {
     }
 
     private class MonitorTimer extends TimerTask {
-        private Map<Key, AtomicReference<MonitorData>> monitorData;
+        private Map<Key, AtomicReference<Data>> monitorData;
         private CommandProcess process;
         private int limit;
 
-        MonitorTimer(Map<Key, AtomicReference<MonitorData>> monitorData, CommandProcess process, int limit) {
+        MonitorTimer(Map<Key, AtomicReference<Data>> monitorData, CommandProcess process, int limit) {
             this.monitorData = monitorData;
             this.process = process;
             this.limit = limit;
@@ -200,26 +169,53 @@ class MonitorAdviceListener extends AdviceListenerAdapter {
                 return;
             }
 
-            List<MonitorData> monitorDataList = new ArrayList<MonitorData>(monitorData.size());
-            for (Map.Entry<Key, AtomicReference<MonitorData>> entry : monitorData.entrySet()) {
-                final AtomicReference<MonitorData> value = entry.getValue();
+            TableElement table = new TableElement().leftCellPadding(1).rightCellPadding(1);
+            table.row(true, label("timestamp").style(Decoration.bold.bold()),
+                    label("class").style(Decoration.bold.bold()),
+                    label("method").style(Decoration.bold.bold()),
+                    label("total").style(Decoration.bold.bold()),
+                    label("success").style(Decoration.bold.bold()),
+                    label("fail").style(Decoration.bold.bold()),
+                    label("avg-rt(ms)").style(Decoration.bold.bold()),
+                    label("fail-rate").style(Decoration.bold.bold()));
 
-                MonitorData data;
+            for (Map.Entry<Key, AtomicReference<Data>> entry : monitorData.entrySet()) {
+                final AtomicReference<Data> value = entry.getValue();
+
+                Data data;
                 while (true) {
                     data = value.get();
-                    //swap monitor data to new instance
-                    if (value.compareAndSet(data, new MonitorData())) {
+                    if (value.compareAndSet(data, new Data())) {
                         break;
                     }
                 }
 
                 if (null != data) {
-                    data.setClassName(entry.getKey().getClassName());
-                    data.setMethodName(entry.getKey().getMethodName());
-                    monitorDataList.add(data);
+
+                    final DecimalFormat df = new DecimalFormat("0.00");
+
+                    table.row(
+                            new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()),
+                            entry.getKey().getClassName(),
+                            entry.getKey().getMethodName(),
+                            "" + data.getTotal(),
+                            "" + data.getSuccess(),
+                            "" + data.getFailed(),
+                            df.format(div(data.getCost(), data.getTotal())),
+                            df.format(100.0d * div(data.getFailed(), data.getTotal())) + "%"
+                    );
+
                 }
             }
-            process.appendResult(new MonitorModel(monitorDataList));
+
+            process.write(RenderUtil.render(table, process.width()) + "\n");
+        }
+
+        private double div(double a, double b) {
+            if (b == 0) {
+                return 0;
+            }
+            return a / b;
         }
 
     }
@@ -253,7 +249,8 @@ class MonitorAdviceListener extends AdviceListenerAdapter {
 
         @Override
         public boolean equals(Object obj) {
-            if (!(obj instanceof Key)) {
+            if (null == obj
+                    || !(obj instanceof Key)) {
                 return false;
             }
             Key okey = (Key) obj;
@@ -262,4 +259,47 @@ class MonitorAdviceListener extends AdviceListenerAdapter {
 
     }
 
+    /**
+     * 数据监控用的value
+     *
+     * @author vlinux
+     */
+    private static class Data {
+        private int total;
+        private int success;
+        private int failed;
+        private double cost;
+
+        public int getTotal() {
+            return total;
+        }
+
+        public void setTotal(int total) {
+            this.total = total;
+        }
+
+        public int getSuccess() {
+            return success;
+        }
+
+        public void setSuccess(int success) {
+            this.success = success;
+        }
+
+        public int getFailed() {
+            return failed;
+        }
+
+        public void setFailed(int failed) {
+            this.failed = failed;
+        }
+
+        public double getCost() {
+            return cost;
+        }
+
+        public void setCost(double cost) {
+            this.cost = cost;
+        }
+    }
 }
