@@ -120,7 +120,7 @@ public class InternalCommandManager {
             }
         }
     }
-
+    // 匹配指令解析器
     private static Command getCommand(CommandResolver commandResolver, String name) {
         List<Command> commands = commandResolver.commands();
         if (commands == null || commands.isEmpty()) {

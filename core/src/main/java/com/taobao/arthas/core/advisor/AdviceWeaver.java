@@ -23,6 +23,14 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p/>
  * <h2>线程帧栈与执行帧栈</h2>
  * 编织者在执行通知的时候有两个重要的栈:线程帧栈(threadFrameStack),执行帧栈(frameStack)
+ *
+ *
+ * https://www.jianshu.com/p/ff8523544e76
+ *
+ * https://www.jb51.net/article/264692.htm
+ *
+ * https://blog.csdn.net/fedorafrog/article/details/104538652
+ *
  * <p/>
  * Created by vlinux on 15/5/17.
  */
@@ -54,6 +62,8 @@ public class AdviceWeaver extends ClassVisitor implements Opcodes {
      * 方法开始<br/>
      * 用于编织通知器,外部不会直接调用
      *
+     * 增强后的字节码在执行源代码之前会执行类似：Spy.ON_BEFORE_METHOD.invoke((Object)null,new Object[]{省略}) ，这个就会执行methodOnBegin方法
+     * 具体参考该项目下的MathGame.class, 这个文件是增前后的文件
      * @param loader     类加载器
      * @param adviceId   通知ID
      * @param className  类名
@@ -75,6 +85,9 @@ public class AdviceWeaver extends ClassVisitor implements Opcodes {
         }
 
         try {
+            /**
+             * 将主要信息放在栈中，并存入线程变量，在methodOnReturnEnd等方法中可以使用进行方法前置通知
+             */
             // 构建执行帧栈,保护当前的执行现场
             final GaStack<Object> frameStack = new ThreadUnsafeFixGaStack<Object>(FRAME_STACK_SIZE);
             frameStack.push(loader);
@@ -90,7 +103,7 @@ public class AdviceWeaver extends ClassVisitor implements Opcodes {
             // 获取通知器并做前置通知
             before(listener, loader, className, methodName, methodDesc, target, args);
 
-            // 保护当前执行帧栈,压入线程帧栈
+            // 保护当前执行帧栈,压入【模拟的】线程帧栈
             threadFrameStackPush(frameStack);
         } finally {
             isSelfCallRef.set(false);
@@ -101,7 +114,7 @@ public class AdviceWeaver extends ClassVisitor implements Opcodes {
 
     /**
      * 方法以返回结束<br/>
-     * 用于编织通知器,外部不会直接调用
+     * 用于编织通知器,外部不会直接调用， 真实方法结束后会调用这个方法，可以参看增强后的字节码
      *
      * @param returnObject 返回对象
      *                     若目标为静态方法,则为null
@@ -135,10 +148,10 @@ public class AdviceWeaver extends ClassVisitor implements Opcodes {
         }
 
         try {
-            // 弹射线程帧栈,恢复Begin所保护的执行帧栈
+            // 弹射线程帧栈,恢复Begin所保护的执行帧栈， 从模拟的线程栈中拿出之前调用方法push入的记录信息
             final GaStack<Object> frameStack = threadFrameStackPop();
 
-            // 弹射执行帧栈,恢复Begin所保护的现场
+            // 弹射执行帧栈,恢复Begin所保护的现场，获取的pop的数据和push的顺序相反
             final AdviceListener listener = (AdviceListener) frameStack.pop();
             final Object[] args = (Object[]) frameStack.pop();
             final Object target = frameStack.pop();
@@ -148,7 +161,7 @@ public class AdviceWeaver extends ClassVisitor implements Opcodes {
             final ClassLoader loader = (ClassLoader) frameStack.pop();
 
             // 异常通知
-            if (isThrowing) {
+            if (isThrowing) {  // 这个参数是真实方法结束后，增强代码调用本方法传入的参数，具体看增前后的代码
                 afterThrowing(listener, loader, className, methodName, methodDesc, target, args, (Throwable) returnOrThrowable);
             }
 
@@ -224,7 +237,7 @@ public class AdviceWeaver extends ClassVisitor implements Opcodes {
      * 将当前执行帧栈压入线程栈
      */
     private static void threadFrameStackPush(GaStack<Object> frameStack) {
-        GaStack<GaStack<Object>> threadFrameStack = threadBoundContext.get();
+        GaStack<GaStack<Object>> threadFrameStack = threadBoundContext.get(); //一个线程对应一个线程栈
         if (null == threadFrameStack) {
             threadBoundContext.set(threadFrameStack = new ThreadUnsafeGaStack<GaStack<Object>>());
         }
@@ -249,10 +262,10 @@ public class AdviceWeaver extends ClassVisitor implements Opcodes {
     public static void reg(int adviceId, AdviceListener listener) {
 
         // 触发监听器创建
-        listener.create();
+        listener.create();  // AdviceListener举例：WatchAdviceListener、TraceAdviceListener、MonitorAdviceListener
 
         // 注册监听器
-        advices.put(adviceId, listener);
+        advices.put(adviceId, listener); // 保存某个指定的adviceId对应的监听器
     }
 
     /**
@@ -298,9 +311,9 @@ public class AdviceWeaver extends ClassVisitor implements Opcodes {
                                ClassLoader loader, String className, String methodName, String methodDesc,
                                Object target, Object[] args) {
 
-        if (null != listener) {
+        if (null != listener) { // 举例：WatchAdviceListener
             try {
-                listener.before(loader, className, methodName, methodDesc, target, args);
+                listener.before(loader, className, methodName, methodDesc, target, args); // 调用：com.taobao.arthas.core.advisor.ReflectAdviceListenerAdapter.before(java.lang.ClassLoader, java.lang.String, java.lang.String, java.lang.String, java.lang.Object, java.lang.Object[])
             } catch (Throwable t) {
                 logger.warn("advice before failed.", t);
             }
@@ -355,7 +368,7 @@ public class AdviceWeaver extends ClassVisitor implements Opcodes {
      * @param cv           ClassVisitor for ASM
      */
     public AdviceWeaver(int adviceId, boolean isTracing, boolean skipJDKTrace, String className, Matcher matcher, EnhancerAffect affect, ClassVisitor cv) {
-        super(Opcodes.ASM7, cv);
+        super(Opcodes.ASM9, cv);
         this.adviceId = adviceId;
         this.isTracing = isTracing;
         this.skipJDKTrace = skipJDKTrace;
@@ -392,7 +405,7 @@ public class AdviceWeaver extends ClassVisitor implements Opcodes {
                 || !matcher.matching(methodName)
                 || ArthasCheckUtils.isEquals(methodName, "<clinit>");
     }
-
+//    visitMethod是对类中每个方法的访问
     @Override
     public MethodVisitor visitMethod(
             final int access,
@@ -410,7 +423,7 @@ public class AdviceWeaver extends ClassVisitor implements Opcodes {
         // 编织方法计数
         affect.mCnt(1);
 
-        return new AdviceAdapter(Opcodes.ASM7, new JSRInlinerAdapter(mv, access, name, desc, signature, exceptions), access, name, desc) {
+        AdviceAdapter adviceAdapter = new AdviceAdapter(Opcodes.ASM7, new JSRInlinerAdapter(mv, access, name, desc, signature, exceptions), access, name, desc) {
 
             // -- Label for try...catch block
             private final Label beginLabel = new Label();
@@ -448,7 +461,9 @@ public class AdviceWeaver extends ClassVisitor implements Opcodes {
                 if (!GlobalOptions.isDebugForAsm) {
                     return;
                 }
-
+                /**
+                 * https://blog.csdn.net/Mr__fang/article/details/54846502?ops_request_misc=%257B%2522request%255Fid%2522%253A%2522168967367116800182124148%2522%252C%2522scm%2522%253A%252220140713.130102334..%2522%257D&request_id=168967367116800182124148&biz_id=0&utm_medium=distribute.pc_search_result.none-task-blog-2~all~sobaiduend~default-1-54846502-null-null.142^v89^chatsearch,239^v2^insert_chatgpt&utm_term=visitFieldInsn&spm=1018.2226.3001.4187
+                 */
                 // println msg
                 visitFieldInsn(GETSTATIC, "java/lang/System", "out", "Ljava/io/PrintStream;");
                 if (StringUtils.isBlank(append.toString())) {
@@ -487,7 +502,7 @@ public class AdviceWeaver extends ClassVisitor implements Opcodes {
 
                 switch (keyOfMethod) {
 
-                    case KEY_ARTHAS_ADVICE_BEFORE_METHOD: {
+                    case KEY_ARTHAS_ADVICE_BEFORE_METHOD: { // 获取Spy这个类中的变量ON_BEFORE_METHOD，通过ASM的方法进行调用, 以下其他几个方法类似
                         getStatic(ASM_TYPE_SPY, "ON_BEFORE_METHOD", ASM_TYPE_METHOD);
                         break;
                     }
@@ -546,10 +561,19 @@ public class AdviceWeaver extends ClassVisitor implements Opcodes {
             }
 
             /**
-             * 加载before通知参数数组
+             * 加载before通知参数数组：加载Spy的ON_BEFORE_METHOD方法对应的参数，而ON_BEFORE_METHOD这个方法对应的是AdviceWeaver类中的methodOnBegin方法
+             *
+             * 构造七个参数
+             *
+             * public static void methodOnBegin(
+             *             int adviceId,
+             *             ClassLoader loader, String className, String methodName, String methodDesc,
+             *             Object target, Object[] args) {
+             *            ...
+             * }
              */
             private void loadArrayForBefore() {
-                push(7);
+                push(7); // 参数索引位置??
                 newArray(ASM_TYPE_OBJECT);
 
                 dup();
@@ -590,6 +614,10 @@ public class AdviceWeaver extends ClassVisitor implements Opcodes {
             }
 
 
+            /**
+             * https://blog.csdn.net/fedorafrog/article/details/104538652
+             */
+//            在访问方法前执行onMethodEnter中的内容:  先调用onMethodEnter
             @Override
             protected void onMethodEnter() {
 
@@ -597,10 +625,14 @@ public class AdviceWeaver extends ClassVisitor implements Opcodes {
                     @Override
                     public void code() {
 
+                        /**
+                         * 以下是过程是ASM操作，调用AdviceWeaver的methodOnBegin方法
+                         *
+                         */
                         final StringBuilder append = new StringBuilder();
                         _debug(append, "debug:onMethodEnter()");
 
-                        // 加载before方法
+                        // 加载before方法: // 获取Spy这个类中的变量ON_BEFORE_METHOD(AdviceWeaver的methodOnBegin方法)，通过ASM的方法进行调用
                         loadAdviceMethod(KEY_ARTHAS_ADVICE_BEFORE_METHOD);
 
                         _debug(append, "debug:onMethodEnter() > loadAdviceMethod()");
@@ -608,19 +640,23 @@ public class AdviceWeaver extends ClassVisitor implements Opcodes {
                         // 推入Method.invoke()的第一个参数
                         pushNull();
 
-                        // 方法参数
+                        // 准备methodOnBegin方法的入参参数：说明：需要对字节码指令、局部变量表、操作数栈有一定了解
                         loadArrayForBefore();
 
                         _debug(append, "debug:onMethodEnter() > loadAdviceMethod() > loadArrayForBefore()");
 
-                        // 调用方法
+                        // 调用方法(AdviceWeaver的methodOnBegin方法)：invoke virtual method on object objectref and puts the result on the stack (might be void) 参考：https://en.wikipedia.org/wiki/List_of_Java_bytecode_instructions
+//                        Spy.ON_BEFORE_METHOD.invoke((Object)null, new Integer(0), Class.forName("demo.MathGame").getClassLoader(), "demo/MathGame", "print", "(ILjava/util/List;)V", null, new Object[]{new Integer(number), primeFactors});
+                        /**
+                         * 可参考增强后的class文件增加了哪些代码进行辅助分析
+                         */
                         invokeVirtual(ASM_TYPE_METHOD, ASM_METHOD_METHOD_INVOKE);
-                        pop();
+                        pop(); //discard the top value on the stack
 
                         _debug(append, "debug:onMethodEnter() > loadAdviceMethod() > loadArrayForBefore() > invokeVirtual()");
                     }
                 });
-
+                //标记method begin,用于throwing的try-catch-finally block
                 mark(beginLabel);
 
             }
@@ -658,17 +694,17 @@ public class AdviceWeaver extends ClassVisitor implements Opcodes {
                             _debug(append, "debug:onMethodExit() > loadReturn()");
 
 
-                            // 加载returning方法
+                            // 加载returning方法: methodOnReturnEnd方法
                             loadAdviceMethod(KEY_ARTHAS_ADVICE_RETURN_METHOD);
                             _debug(append, "debug:onMethodExit() > loadReturn() > loadAdviceMethod()");
 
                             // 推入Method.invoke()的第一个参数
                             pushNull();
 
-                            // 加载return通知参数数组
+                            // 加载return通知参数数组:methodOnReturnEnd入参
                             loadReturnArgs();
                             _debug(append, "debug:onMethodExit() > loadReturn() > loadAdviceMethod() > loadReturnArgs()");
-
+//                            Spy.ON_RETURN_METHOD.invoke((Object)null, null);
                             invokeVirtual(ASM_TYPE_METHOD, ASM_METHOD_METHOD_INVOKE);
                             pop();
 
@@ -698,9 +734,9 @@ public class AdviceWeaver extends ClassVisitor implements Opcodes {
 
             @Override
             public void visitMaxs(int maxStack, int maxLocals) {
-
+                //每个方法最后调用一次,在visitEnd之前
                 mark(endLabel);
-//                catchException(beginLabel, endLabel, ASM_TYPE_THROWABLE);
+//                catchException(beginLabel, endLabel, ASM_TYPE_THROWABLE); //在beginLabel和endLabel之间使用try-catch block,在这之后需要紧跟exception的处理逻辑code
                 visitTryCatchBlock(beginLabel, endLabel, mark(),
                         ASM_TYPE_THROWABLE.getInternalName());
 
@@ -727,14 +763,14 @@ public class AdviceWeaver extends ClassVisitor implements Opcodes {
                         loadThrowArgs();
                         _debug(append, "debug:catchException() > loadThrow() > loadAdviceMethod() > loadThrowArgs()");
 
-                        // 调用方法
+                        // 调用方法：Spy.ON_THROWS_METHOD.invoke((Object)null, var5);
                         invokeVirtual(ASM_TYPE_METHOD, ASM_METHOD_METHOD_INVOKE);
                         pop();
                         _debug(append, "debug:catchException() > loadThrow() > loadAdviceMethod() > loadThrowArgs() > invokeVirtual()");
 
                     }
                 });
-
+                //将原有的异常抛出(不破坏原有异常逻辑)
                 throwException();
 
                 super.visitMaxs(maxStack, maxLocals);
@@ -818,6 +854,7 @@ public class AdviceWeaver extends ClassVisitor implements Opcodes {
              * 加载异常
              */
             private void loadThrow() {
+                //从栈顶加载异常(复制一份给onThrowing当参数用)
                 dup();
             }
 
@@ -979,6 +1016,7 @@ public class AdviceWeaver extends ClassVisitor implements Opcodes {
                 // }
             }
         };
+        return adviceAdapter;
     }
 
     static class AsmTryCatchBlock {

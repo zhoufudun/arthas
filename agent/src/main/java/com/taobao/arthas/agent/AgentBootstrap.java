@@ -113,7 +113,7 @@ public class AgentBootstrap {
             /**
              * agentJar加载到自定义的ArthasClassloader加载器，由我们自定义的ArthasClassloader加载agentJar
              */
-            arthasClassLoader = new ArthasClassloader(new URL[]{agentJar.toURI().toURL()});
+            arthasClassLoader = new ArthasClassloader(new URL[]{agentJar.toURI().toURL()}); // file:/D:/code/arthas-zfd-3.6.9/packaging/target/arthas-3.1.4-bin/arthas-core.jar
         }
         return arthasClassLoader;
     }

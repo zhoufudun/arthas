@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static java.lang.String.format;
 
 /**
- * 增强影响范围<br/>
+ * 增强影响范围统计类<br/>
  * 统计影响类/方法/耗时
  * Created by vlinux on 15/5/19.
  */

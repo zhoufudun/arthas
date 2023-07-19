@@ -76,13 +76,13 @@ public class Enhancer implements ClassFileTransformer {
             return;
         }
         // 因为 Spy 是被bootstrap classloader加载的，所以一定可以被找到，如果找不到的话，说明应用方的classloader实现有问题
-        Class<?> spyClass = targetClassLoader.loadClass(Constants.SPY_CLASSNAME);
+        Class<?> spyClass = targetClassLoader.loadClass(Constants.SPY_CLASSNAME); //spyClass举例：class java.arthas.Spy
 
-        final ClassLoader arthasClassLoader = Enhancer.class.getClassLoader();
+        final ClassLoader arthasClassLoader = Enhancer.class.getClassLoader(); // ArthasClassLoader
 
         // 初始化间谍, AgentLauncher会把各种hook设置到ArthasClassLoader当中
         // 这里我们需要把这些hook取出来设置到目标classloader当中
-        Method initMethod = spyClass.getMethod("init", ClassLoader.class, Method.class,
+        Method initMethod = spyClass.getMethod("init", ClassLoader.class, Method.class, // public static void java.arthas.Spy.init(java.lang.ClassLoader,java.lang.reflect.Method,java.lang.reflect.Method,java.lang.reflect.Method,java.lang.reflect.Method,java.lang.reflect.Method,java.lang.reflect.Method)
                 Method.class, Method.class, Method.class, Method.class, Method.class);
         initMethod.invoke(null, arthasClassLoader,
                 FieldUtils.getField(spyClass, "ON_BEFORE_METHOD").get(null),
@@ -94,9 +94,12 @@ public class Enhancer implements ClassFileTransformer {
 	}
 
     @Override
-    public byte[] transform(final ClassLoader inClassLoader, String className, Class<?> classBeingRedefined,
+    public byte[] transform(final ClassLoader inClassLoader, String className, Class<?> classBeingRedefined, // classBeingRedefined参数举例：class demo.MathGame
                     ProtectionDomain protectionDomain, byte[] classfileBuffer) throws IllegalClassFormatException {
         try {
+
+            System.out.println("transform, className="+className);
+
             // 这里要再次过滤一次，为啥？因为在transform的过程中，有可能还会再诞生新的类
             // 所以需要将之前需要转换的类集合传递下来，再次进行判断
             if (!matchingClasses.contains(classBeingRedefined)) {
@@ -109,12 +112,12 @@ public class Enhancer implements ClassFileTransformer {
             // 因为要支持多人协作,存在多人同时增强的情况
             final byte[] byteOfClassInCache = classBytesCache.get(classBeingRedefined);
             if (null != byteOfClassInCache) {
-                cr = new ClassReader(byteOfClassInCache);
+                cr = new ClassReader(byteOfClassInCache); // 增强的字节码存在，直接读取
             }
 
             // 如果没有命中缓存,则从原始字节码开始增强
             else {
-                cr = new ClassReader(classfileBuffer);
+                cr = new ClassReader(classfileBuffer); // buffer为：类文件格式的输入字节缓冲区
             }
 
             // 字节码增强
@@ -160,7 +163,7 @@ public class Enhancer implements ClassFileTransformer {
             // 生成增强字节码
             cr.accept(new AdviceWeaver(adviceId, isTracing, skipJDKTrace, cr.getClassName(), methodNameMatcher, affect,
                             cw), EXPAND_FRAMES);
-            final byte[] enhanceClassByteArray = cw.toByteArray();
+            final byte[] enhanceClassByteArray = cw.toByteArray(); // 增强后的字节码
 
             // 生成成功,推入缓存
             classBytesCache.put(classBeingRedefined, enhanceClassByteArray);
@@ -195,7 +198,7 @@ public class Enhancer implements ClassFileTransformer {
             return;
         }
         final File dumpClassFile = new File("./arthas-class-dump/" + className + ".class");
-        final File classPath = new File(dumpClassFile.getParent());
+        final File classPath = new File(dumpClassFile.getParent()); // .\arthas-class-dump\demo
 
         // 创建类所在的包路径
         if (!classPath.mkdirs()
@@ -203,7 +206,7 @@ public class Enhancer implements ClassFileTransformer {
             logger.warn("create dump classpath:{} failed.", classPath);
             return;
         }
-
+        System.out.println("dump Enhancer Class success, file path="+dumpClassFile.getAbsolutePath());
         // 将类字节码写入文件
         try {
             FileUtils.writeByteArrayToFile(dumpClassFile, data);
@@ -261,7 +264,7 @@ public class Enhancer implements ClassFileTransformer {
     }
 
     /**
-     * 对象增强
+     * 对象增强：收到请求例如：watch、monitor、trace等指令后才开始执行
      *
      * @param inst              inst
      * @param adviceId          通知ID
@@ -292,7 +295,7 @@ public class Enhancer implements ClassFileTransformer {
 
         // 构建增强器
         final Enhancer enhancer = new Enhancer(adviceId, isTracing, skipJDKTrace, enhanceClassSet, methodNameMatcher, affect);
-        try {
+        try {//添加.class文件转换器: ClassFileTransformer
             inst.addTransformer(enhancer, true);
 
             // 批量增强
@@ -301,7 +304,7 @@ public class Enhancer implements ClassFileTransformer {
                 final Class<?>[] classArray = new Class<?>[size];
                 arraycopy(enhanceClassSet.toArray(), 0, classArray, 0, size);
                 if (classArray.length > 0) {
-                    inst.retransformClasses(classArray);
+                    inst.retransformClasses(classArray);//增强目标类，最终会调到com.taobao.arthas.core.advisor.Enhancer.transform(...)方法
                     logger.info("Success to batch transform classes: " + Arrays.toString(classArray));
                 }
             } else {
@@ -323,7 +326,7 @@ public class Enhancer implements ClassFileTransformer {
                 }
             }
         } finally {
-            inst.removeTransformer(enhancer);
+            inst.removeTransformer(enhancer);//增强完毕，移除目标类的增强器，无需多次，也不可以多次增强
         }
 
         return affect;

@@ -36,7 +36,7 @@ public class TelnetTermServer extends TermServer {
 
     @Override
     public TermServer termHandler(Handler<Term> handler) {
-        termHandler = handler;
+        termHandler = handler; // TermServerTermHandler
         return this;
     }
 
@@ -58,7 +58,7 @@ public class TelnetTermServer extends TermServer {
                      * Helper.loadKeymap()这个类方法主要是在项目目录inputrc文件里加载对应的快捷键以及对应的处理类name标识，
                      * 返回个映射对象，对命令行界面快捷键指示处理需要。
                      *
-                     * 在监听到有命令的时候会调用
+                     * 在第一次监听到有命令的时候会调用
                      * com.taobao.arthas.core.shell.handlers.server.TermServerTermHandler#handle(com.taobao.arthas.core.shell.term.Term)
                      */
                     termHandler.handle(new TermImpl(Helper.loadKeymap(), conn));

@@ -40,6 +40,21 @@ public abstract class StringUtils {
     /**
      * 将一个对象转换为字符串
      *
+     * 以watch为例：obj为
+     * @ArrayList[
+     *     @Object[][
+     *         @Integer[124220],
+     *         @ArrayList[
+     *             @Integer[2],
+     *             @Integer[2],
+     *             @Integer[5],
+     *             @Integer[6211],
+     *         ],
+     *     ],
+     *     null,
+     *     null,
+     * ]
+     *
      * @param obj 目标对象
      * @return 字符串
      */

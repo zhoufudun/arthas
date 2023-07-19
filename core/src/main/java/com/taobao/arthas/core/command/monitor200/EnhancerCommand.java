@@ -58,9 +58,9 @@ public abstract class EnhancerCommand extends AnnotatedCommand {
     @Override
     public void process(final CommandProcess process) {
         // ctrl-C support
-        process.interruptHandler(new CommandInterruptHandler(process));
+        process.interruptHandler(new CommandInterruptHandler(process)); // 设置ctrl-C处理器
         // q exit support
-        process.stdinHandler(new QExitHandler(process));
+        process.stdinHandler(new QExitHandler(process));  // 设置q处理器
 
         // start to enhance
         enhance(process);
@@ -88,8 +88,12 @@ public abstract class EnhancerCommand extends AnnotatedCommand {
         super.complete(completion);
     }
 
+    /**
+     *
+     * @param process
+     */
     protected void enhance(CommandProcess process) {
-        Session session = process.session();
+         Session session = process.session();
         if (!session.tryLock()) {
             process.write("someone else is enhancing classes, pls. wait.\n");
             process.end();
@@ -107,7 +111,7 @@ public abstract class EnhancerCommand extends AnnotatedCommand {
             if(listener instanceof AbstractTraceAdviceListener) {
                 skipJDKTrace = ((AbstractTraceAdviceListener) listener).getCommand().isSkipJDKTrace();
             }
-
+            // 构建增强器
             EnhancerAffect effect = Enhancer.enhance(inst, lock, listener instanceof InvokeTraceable,
                     skipJDKTrace, getClassNameMatcher(), getMethodNameMatcher());
 
@@ -127,12 +131,12 @@ public abstract class EnhancerCommand extends AnnotatedCommand {
             if (session.getLock() == lock) {
                 // 注册通知监听器
                 process.register(lock, listener);
-                if (process.isForeground()) {
+                if (process.isForeground()) { // 是否更新前台信息，是--》客户端显示：Press Q or Ctrl+C to abort
                     process.echoTips(Constants.Q_OR_CTRL_C_ABORT_MSG + "\n");
                 }
             }
 
-            process.write(effect + "\n");
+            process.write(effect + "\n"); // effect举例;[dump: D:\code\arthas-zfd-3.6.9\.\arthas-class-dump\demo\MathGame.class] Affect(class-cnt:1 , method-cnt:1) cost in 661536 ms.
         } catch (UnmodifiableClassException e) {
             logger.error(null, "error happens when enhancing class", e);
         } finally {

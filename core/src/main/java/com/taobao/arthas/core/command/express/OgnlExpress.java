@@ -54,7 +54,7 @@ public class OgnlExpress implements Express {
     }
 
     @Override
-    public Express bind(String name, Object value) {
+    public Express bind(String name, Object value) { // 以watch指令为里：name=cost, value=耗时
         context.put(name, value);
         return this;
     }

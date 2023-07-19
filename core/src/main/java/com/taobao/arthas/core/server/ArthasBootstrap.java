@@ -169,7 +169,7 @@ public class ArthasBootstrap {
             /**
              * 接下来启动服务器监听了，这里面用到了一个第三方框架termd（是一款优秀的命令行程序开发框架）
              */
-            shellServer.listen(new BindHandler(isBindRef));
+            shellServer.listen(new BindHandler(isBindRef)); // BindHandler客户端第一次连接才使用，之后不使用
 
             logger.info("as-server listening on network={};telnet={};http={};timeout={};", configure.getIp(),
                     configure.getTelnetPort(), configure.getHttpPort(), options.getConnectionTimeout());

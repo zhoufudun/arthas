@@ -15,7 +15,7 @@ public class TermServerTermHandler implements Handler<Term> {
     }
 
     @Override
-    public void handle(Term term) {
+    public void handle(Term term) { // TermImpl
         shellServer.handleTerm(term);
     }
 }

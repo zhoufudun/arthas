@@ -122,9 +122,9 @@ public class TermImpl implements Term {
         inReadline = true;
         readline.readline(conn, prompt, new RequestHandler(this, lineHandler));
     }
-
+    // linHandler:ShellLineHandler     completionHandler:CommandManagerCompletionHandler
     public void readline(String prompt, Handler<String> lineHandler, Handler<Completion> completionHandler) {
-        if (conn.getStdinHandler() != echoHandler) {
+        if (conn.getStdinHandler() != echoHandler) { //echoHandler:DefaultTermStdinHandler  conn: TelnetTtyConnection
             throw new IllegalStateException();
         }
         if (inReadline) {
@@ -215,6 +215,22 @@ public class TermImpl implements Term {
             }
         }
         conn.write(data);
+        /**
+         * watch举例：
+         * ts=2023-07-19 15:50:39; [cost=1331861.2534ms] result=@ArrayList[
+         *     @Object[][
+         *         @Integer[124220],
+         *         @ArrayList[
+         *             @Integer[2],
+         *             @Integer[2],
+         *             @Integer[5],
+         *             @Integer[6211],
+         *         ],
+         *     ],
+         *     null,
+         *     null,
+         * ]
+         */
         return this;
     }
 

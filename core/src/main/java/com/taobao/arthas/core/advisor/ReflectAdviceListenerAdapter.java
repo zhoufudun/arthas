@@ -122,7 +122,7 @@ public abstract class ReflectAdviceListenerAdapter implements AdviceListener {
             ClassLoader loader, String className, String methodName, String methodDesc,
             Object target, Object[] args) throws Throwable {
         final Class<?> clazz = toClass(loader, className);
-        before(loader, clazz, toMethod(loader, clazz, methodName, methodDesc), target, args);
+        before(loader, clazz, toMethod(loader, clazz, methodName, methodDesc), target, args); // 调用具体的实现类。比如：com.taobao.arthas.core.command.monitor200.WatchAdviceListener.before
     }
 
     @Override
@@ -130,7 +130,7 @@ public abstract class ReflectAdviceListenerAdapter implements AdviceListener {
             ClassLoader loader, String className, String methodName, String methodDesc,
             Object target, Object[] args, Object returnObject) throws Throwable {
         final Class<?> clazz = toClass(loader, className);
-        afterReturning(loader, clazz, toMethod(loader, clazz, methodName, methodDesc), target, args, returnObject);
+        afterReturning(loader, clazz, toMethod(loader, clazz, methodName, methodDesc), target, args, returnObject); // 调用具体的实现类。比如：com.taobao.arthas.core.command.monitor200.WatchAdviceListener.before
     }
 
     @Override
@@ -138,7 +138,7 @@ public abstract class ReflectAdviceListenerAdapter implements AdviceListener {
             ClassLoader loader, String className, String methodName, String methodDesc,
             Object target, Object[] args, Throwable throwable) throws Throwable {
         final Class<?> clazz = toClass(loader, className);
-        afterThrowing(loader, clazz, toMethod(loader, clazz, methodName, methodDesc), target, args, throwable);
+        afterThrowing(loader, clazz, toMethod(loader, clazz, methodName, methodDesc), target, args, throwable); // 举例：该方法具体实现为：com.taobao.arthas.core.command.monitor200.WatchAdviceListener
     }
 
 

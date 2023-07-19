@@ -16,6 +16,10 @@ public class RequestHandler implements Consumer<String> {
         this.lineHandler = lineHandler;
     }
 
+    /**
+     * 接受客户端指令的时候执行
+     * @param line
+     */
     @Override
     public void accept(String line) {
         term.setInReadline(false);

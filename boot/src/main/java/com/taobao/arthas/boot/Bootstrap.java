@@ -286,7 +286,7 @@ public class Bootstrap {
 
         Bootstrap bootstrap = new Bootstrap();
 
-        CLI cli = CLIConfigurator.define(Bootstrap.class); // 反射设置熟悉只
+        CLI cli = CLIConfigurator.define(Bootstrap.class); // 反射设置属性
         CommandLine commandLine = cli.parse(Arrays.asList(args));
 
         try {

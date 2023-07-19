@@ -30,6 +30,8 @@ public class Spy {
 
     /**
      * 用于普通的间谍初始化
+     *
+     * https://github.com/alibaba/arthas/issues/403
      */
     public static void init(
             ClassLoader classLoader,
@@ -39,9 +41,9 @@ public class Spy {
             Method beforeInvokingMethod,
             Method afterInvokingMethod,
             Method throwInvokingMethod) {
-        CLASSLOADER = classLoader;
-        ON_BEFORE_METHOD = onBeforeMethod;
-        ON_RETURN_METHOD = onReturnMethod;
+        CLASSLOADER = classLoader; // ArthasClassloader
+        ON_BEFORE_METHOD = onBeforeMethod; // 举例：public static void com.taobao.arthas.core.advisor.AdviceWeaver.methodOnBegin(int,java.lang.ClassLoader,java.lang.String,java.lang.String,java.lang.String,java.lang.Object,java.lang.Object[])
+        ON_RETURN_METHOD = onReturnMethod; // 举例：public static void com.taobao.arthas.core.advisor.AdviceWeaver.methodOnReturnEnd(java.lang.Object)
         ON_THROWS_METHOD = onThrowsMethod;
         BEFORE_INVOKING_METHOD = beforeInvokingMethod;
         AFTER_INVOKING_METHOD = afterInvokingMethod;
@@ -60,8 +62,8 @@ public class Spy {
             Method afterInvokingMethod,
             Method throwInvokingMethod,
             Method agentResetMethod) {
-        CLASSLOADER = classLoader;
-        ON_BEFORE_METHOD = onBeforeMethod;
+        CLASSLOADER = classLoader; // ArthasClassloader
+        ON_BEFORE_METHOD = onBeforeMethod; // 举例：public static void com.taobao.arthas.core.advisor.AdviceWeaver.methodOnBegin(int,java.lang.ClassLoader,java.lang.String,java.lang.String,java.lang.String,java.lang.Object,java.lang.Object[])
         ON_RETURN_METHOD = onReturnMethod;
         ON_THROWS_METHOD = onThrowsMethod;
         BEFORE_INVOKING_METHOD = beforeInvokingMethod;

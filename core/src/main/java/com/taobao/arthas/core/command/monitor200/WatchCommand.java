@@ -37,10 +37,10 @@ public class WatchCommand extends EnhancerCommand {
     private boolean isFinish = false;
     private boolean isException = false;
     private boolean isSuccess = false;
-    private Integer expand = 1;
+    private Integer expand = 1; // 对象展开深度
     private Integer sizeLimit = 10 * 1024 * 1024;
     private boolean isRegEx = false;
-    private int numberOfLimit = 100;
+    private int numberOfLimit = 100; // 指令的执行次数限制：watch demo.MathGame print '{params,returnObj,throwExp}'  -n 5  -x 3    这条指令最多执行5次
 
     @Argument(index = 0, argName = "class-pattern")
     @Description("The full qualified class name you want to watch")
@@ -145,7 +145,8 @@ public class WatchCommand extends EnhancerCommand {
     public boolean isSuccess() {
         return isSuccess;
     }
-
+    // 对象的深度，举例:watch demo.MathGame print '{params,returnObj,throwExp}'  -n 5  -x 3
+    // 此时深度就是3
     public Integer getExpand() {
         return expand;
     }
@@ -164,7 +165,7 @@ public class WatchCommand extends EnhancerCommand {
 
     @Override
     protected Matcher getClassNameMatcher() {
-        if (classNameMatcher == null) {
+        if (classNameMatcher == null) {  // 举例：WildcardMatcher
             classNameMatcher = SearchUtils.classNameMatcher(getClassPattern(), isRegEx());
         }
         return classNameMatcher;

@@ -69,7 +69,7 @@ public class ThreadUnsafeGaStack<E> implements GaStack<E> {
             }
         }
     }
-
+    // 模拟数据进入栈帧，这里不会真的直接进入虚拟机栈，而是用内存记录操作顺序和记录数据
     @Override
     public void push(E e) {
         ensureCapacityInternal(current + 1);

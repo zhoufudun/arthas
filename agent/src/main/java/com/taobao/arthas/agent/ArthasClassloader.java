@@ -8,7 +8,7 @@ import java.net.URLClassLoader;
  */
 public class ArthasClassloader extends URLClassLoader {
     public ArthasClassloader(URL[] urls) {
-        super(urls, ClassLoader.getSystemClassLoader().getParent());
+        super(urls, ClassLoader.getSystemClassLoader().getParent()); // 第二个参数：Launcher$ExtClassLoader
     }
 
     @Override

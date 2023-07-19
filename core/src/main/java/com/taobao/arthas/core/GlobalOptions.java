@@ -32,7 +32,7 @@ public class GlobalOptions {
                     "This option enables the enhanced classes to be dumped to external file " +
                             "for further de-compilation and analysis."
     )
-    public static volatile boolean isDump = false;
+    public static volatile boolean isDump = true;
 
     /**
      * 是否支持批量增强<br/>
@@ -75,7 +75,7 @@ public class GlobalOptions {
             summary = "Option to print DEBUG message if ASM is involved",
             description = "This option enables to print DEBUG message of ASM for each method invocation."
     )
-    public static volatile boolean isDebugForAsm = false;
+    public static volatile boolean isDebugForAsm = true;
 
     /**
      * 是否日志中保存命令执行结果

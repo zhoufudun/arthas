@@ -15,6 +15,8 @@ import java.util.List;
 
 /**
  * @author beiwei30 on 23/11/2016.
+ *
+ *
  */
 class CompletionHandler implements Consumer<Completion> {
     private static final Logger logger = LogUtil.getArthasLogger();
@@ -26,6 +28,11 @@ class CompletionHandler implements Consumer<Completion> {
         this.session = session;
     }
 
+    /**
+     * 执行完毕客户端的指令后执行
+     *
+     * @param completion
+     */
     @Override
     public void accept(final Completion completion) {
         try {

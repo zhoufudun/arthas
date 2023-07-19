@@ -57,13 +57,13 @@ public class UserStatUtil {
         }
 
         try {
-            executorService.execute(job);
+            executorService.execute(job); // 客户端的任务提交到线程池
         } catch (Throwable t) {
             //
         }
     }
 
-    public static void arthasUsageSuccess(String cmd, List<String> args) {
+    public static void arthasUsageSuccess(String cmd, List<String> args) { // cmd=watch,args=watch demo.MathGame print '{params,returnObj,throwExp}'  -n 5  -x 3
         StringBuilder commandString = new StringBuilder(cmd);
         for (String arg : args) {
             commandString.append(" ").append(arg);

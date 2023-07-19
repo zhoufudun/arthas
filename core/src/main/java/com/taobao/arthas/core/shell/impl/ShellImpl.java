@@ -60,7 +60,7 @@ public class ShellImpl implements Shell {
         this.commandManager = commandManager;
         this.closedFuture = Future.future();
         this.term = term;
-        this.jobController = jobController;
+        this.jobController = jobController; // GlobalJobControllerImpl
 
         if (term != null) {
             term.setSession(session);

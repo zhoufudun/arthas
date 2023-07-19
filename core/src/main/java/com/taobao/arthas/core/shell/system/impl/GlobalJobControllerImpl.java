@@ -18,7 +18,7 @@ import com.taobao.middleware.logger.Logger;
 
 /**
  * 全局的Job Controller，不应该存在启停的概念，不需要在连接的断开时关闭，
- * 
+ * 收到客户端的请求后，创建任务执行，例如：watch
  * @author gehui 2017年7月31日 上午11:55:41
  */
 public class GlobalJobControllerImpl extends JobControllerImpl {
@@ -65,10 +65,10 @@ public class GlobalJobControllerImpl extends JobControllerImpl {
                 job.terminate();
             }
         };
-        Date timeoutDate = new Date(System.currentTimeMillis() + (getJobTimeoutInSecond() * 1000));
+        Date timeoutDate = new Date(System.currentTimeMillis() + (getJobTimeoutInSecond() * 1000)); // 任务时间达到指定时间就会停止该任务，这里是1d超时时间
         timer.schedule(jobTimeoutTask, timeoutDate);
-        jobTimeoutTaskMap.put(job.id(), jobTimeoutTask);
-        job.setTimeoutDate(timeoutDate);
+        jobTimeoutTaskMap.put(job.id(), jobTimeoutTask); //jobId,jobTimeoutTask
+        job.setTimeoutDate(timeoutDate); // 任务超时时间点
 
         return job;
     }

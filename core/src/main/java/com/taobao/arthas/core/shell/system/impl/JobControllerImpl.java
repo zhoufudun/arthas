@@ -60,8 +60,8 @@ public class JobControllerImpl implements JobController {
     public Job createJob(InternalCommandManager commandManager, List<CliToken> tokens, ShellImpl shell) {
         int jobId = idGenerator.incrementAndGet();
         StringBuilder line = new StringBuilder();
-        for (CliToken arg : tokens) {
-            line.append(arg.raw());
+        for (CliToken arg : tokens) { // tokens就是客户端发的指令，例如： watch demo.MathGame print '{params,returnObj,throwExp}'  -n 5  -x 3
+            line.append(arg.raw()); //举例：watch demo.MathGame print '{params,returnObj,throwExp}'  -n 5  -x 3
         }
         boolean runInBackground = runInBackground(tokens);
         /**
@@ -118,10 +118,10 @@ public class JobControllerImpl implements JobController {
     /**
      * Try to create a process from the command line tokens.
      *
-     * @param line the command line tokens
+     * @param line the command line tokens 例如：watch demo.MathGame print '{params,returnObj,throwExp}'  -n 5  -x 3
      * @param commandManager command manager
      * @param jobId job id
-     * @param term term
+     * @param term term   例如：TermImpl
      * @return the created process
      */
     private Process createProcess(List<CliToken> line, InternalCommandManager commandManager, int jobId, Term term) {
@@ -158,7 +158,7 @@ public class JobControllerImpl implements JobController {
         }
         return runInBackground;
     }
-
+    // 根据指令创建任务：例如：command=class com.taobao.arthas.core.command.monitor200.WatchCommand, tokens是客户端发送的指令例如：watch demo.MathGame print '{params,returnObj,throwExp}'  -n 5  -x 3
     private Process createCommandProcess(Command command, ListIterator<CliToken> tokens, int jobId, Term term) throws IOException {
         List<CliToken> remaining = new ArrayList<CliToken>();
         List<CliToken> pipelineTokens = new ArrayList<CliToken>();

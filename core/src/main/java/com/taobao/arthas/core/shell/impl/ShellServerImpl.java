@@ -95,7 +95,7 @@ public class ShellServerImpl extends ShellServer {
      * 这里注意的是ShellImpl构造把命令列表以及内建命令缓存到session内存。
      * session.readline(); 然后就是等待用户命令输入了，如图中$。 这里利用了term框架封装好的readline方法库，同时根据对应ShellLineHandler来回调处理相应的命令。
      *
-     *
+     * 客户端连接本服务端成功后，创建session
      *
      * @param term
      */

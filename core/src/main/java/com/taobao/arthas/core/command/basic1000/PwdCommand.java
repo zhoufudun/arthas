@@ -13,6 +13,7 @@ public class PwdCommand extends AnnotatedCommand {
     @Override
     public void process(CommandProcess process) {
         process.write(new File("").getAbsolutePath()).write("\n");
+        System.out.println("===pwd===");
         process.end();
     }
 }

@@ -50,7 +50,7 @@ class WatchAdviceListener extends ReflectAdviceListenerAdapter {
 
         finishing(advice);
     }
-
+    // 真实方法抛异常后的处理
     @Override
     public void afterThrowing(ClassLoader loader, Class<?> clazz, ArthasMethod method, Object target, Object[] args,
                               Throwable throwable) {
@@ -69,21 +69,40 @@ class WatchAdviceListener extends ReflectAdviceListenerAdapter {
     }
 
     private boolean isNeedExpand() {
-        Integer expand = command.getExpand();
+        Integer expand = command.getExpand(); // 执行结果的对象是否展开,>=0表示需要展开
         return null != expand && expand >= 0;
     }
 
-    private void watching(Advice advice) {
+    private void watching(Advice advice) { // 方法调用结束，执行耗时统计
         try {
             // 本次调用的耗时
             double cost = threadLocalWatch.costInMillis();
             if (isConditionMet(command.getConditionExpress(), advice, cost)) {
                 // TODO: concurrency issues for process.write
-                Object value = getExpressionResult(command.getExpress(), advice, cost);
+                Object value = getExpressionResult(command.getExpress(), advice, cost); //express:{params,returnObj,throwExp}
                 String result = StringUtils.objectToString(
                         isNeedExpand() ? new ObjectView(value, command.getExpand(), command.getSizeLimit()).draw() : value);
                 process.write("ts=" + DateUtils.getCurrentDate() + "; [cost=" + cost + "ms] result=" + result + "\n");
-                process.times().incrementAndGet();
+                /**
+                 * 举例：ts=2023-07-19 15:00:21; [cost=0.3152ms] result=@ArrayList[
+                 *      @Object[][
+                 *          @Integer[143440],
+                 *          @ArrayList[
+                 *                 @Integer[2],
+                 *                 @Integer[2],
+                 *                 @Integer[2],
+                 *                 @Integer[2],
+                 *                 @Integer[5],
+                 *                 @Integer[11],
+                 *                 @Integer[163],
+                 *         ],
+                 *     ],
+                 *     null,
+                 *     null,
+                 * ]
+                 */
+
+                process.times().incrementAndGet(); // 本次执行完毕，已经执行次数+1
                 if (isLimitExceeded(command.getNumberOfLimit(), process.times().get())) {
                     abortProcess(process, command.getNumberOfLimit());
                 }

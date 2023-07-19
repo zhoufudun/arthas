@@ -87,7 +87,7 @@ public class SearchUtils {
         return result;
     }
 
-    public static Matcher<String> classNameMatcher(String classPattern, boolean isRegEx) {
+    public static Matcher<String> classNameMatcher(String classPattern, boolean isRegEx) { // 举例：第一个参数：demo.MathGame  第二个参数：false
         if (StringUtils.isEmpty(classPattern)) {
             classPattern = isRegEx ? ".*" : "*";
         }

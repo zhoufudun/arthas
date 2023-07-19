@@ -319,7 +319,7 @@ public class ProcessImpl implements Process {
         }
 
         final List<String> args2 = new LinkedList<String>();
-        for (CliToken arg : args) {
+        for (CliToken arg : args) { // args 举例：watch demo.MathGame print '{params,returnObj,throwExp}'  -n 5  -x 3
             if (arg.isText()) {
                 args2.add(arg.value());
             }
@@ -327,8 +327,8 @@ public class ProcessImpl implements Process {
 
         CommandLine cl = null;
         try {
-            if (commandContext.cli() != null) {
-                if (commandContext.cli().parse(args2, false).isAskingForHelp()) {
+            if (commandContext.cli() != null) { // com.taobao.arthas.core.command.monitor200.WatchCommand
+                if (commandContext.cli().parse(args2, false).isAskingForHelp()) { // 客户端命令中由help参数
                     UsageMessageFormatter formatter = new StyledUsageFormatter(Color.green);
                     formatter.setWidth(tty.width());
                     StringBuilder usage = new StringBuilder();
@@ -339,7 +339,7 @@ public class ProcessImpl implements Process {
                     return;
                 }
 
-                cl = commandContext.cli().parse(args2);
+                cl = commandContext.cli().parse(args2);   //args2 举例：watch demo.MathGame print '{params,returnObj,throwExp}'  -n 5  -x 3
             }
         } catch (CLIException e) {
             tty.write(e.getMessage() + "\n");
@@ -367,7 +367,7 @@ public class ProcessImpl implements Process {
         @Override
         public void run() {
             try {
-                handler.handle(process);
+                handler.handle(process); // process:CommandProcessImpl  handler:ProcessHandler
             } catch (Throwable t) {
                 logger.error(null, "Error during processing the command:", t);
                 process.write("Error during processing the command: " + t.getMessage() + "\n");
@@ -382,7 +382,7 @@ public class ProcessImpl implements Process {
         private final Tty tty;
         private final CommandLine commandLine;
         private int enhanceLock = -1;
-        private AtomicInteger times = new AtomicInteger();
+        private AtomicInteger times = new AtomicInteger(); // 指令已经执行次数
         private AdviceListener suspendedListener = null;
 
         public CommandProcessImpl(List<String> args2, Tty tty, CommandLine commandLine) {
@@ -523,7 +523,7 @@ public class ProcessImpl implements Process {
         }
 
         @Override
-        public void register(int enhanceLock, AdviceListener listener) {
+        public void register(int enhanceLock, AdviceListener listener) { // 举例：WatchAdviceListener
             this.enhanceLock = enhanceLock;
             AdviceWeaver.reg(enhanceLock, listener);
         }

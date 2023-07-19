@@ -100,7 +100,7 @@ public class ArthasBanner {
     }
 
     /**
-     * ？？？
+     *  客户端连接后，服务端输出欢迎给客户端
      * @param infos
      * @return
      */

@@ -45,17 +45,17 @@ public class AnnotatedCommandImpl extends Command {
             return false;
         }
     }
-
+    // 举例：获取WatchCommand对应的name()方法的值，其实就是WatchCommand中的name()方法
     @Override
     public String name() {
-        if (shouldOverridesName(clazz)) {
+        if (shouldOverridesName(clazz)) { // 对于WatchCommand没有name()方法
             try {
                 return clazz.newInstance().name();
             } catch (Exception ignore) {
                 // Use cli.getName() instead
             }
         }
-        return cli.getName();
+        return cli.getName(); // WatchCommand会走到这里，其实就是WatchCommand类上的注解@Name("watch")的值
     }
 
     @Override
@@ -71,16 +71,16 @@ public class AnnotatedCommandImpl extends Command {
     }
 
     private void process(CommandProcess process) {
-        AnnotatedCommand instance;
+        AnnotatedCommand instance; // 举例：WatchCommand
         try {
             instance = clazz.newInstance();
         } catch (Exception e) {
             process.end();
             return;
         }
-        CLIConfigurator.inject(process.commandLine(), instance);
+        CLIConfigurator.inject(process.commandLine(), instance); // process.commandLine() 举例： demo.MathGame print '{params,returnObj,throwExp}'
         instance.process(process);
-        UserStatUtil.arthasUsageSuccess(name(), process.args());
+        UserStatUtil.arthasUsageSuccess(name(), process.args()); // process.args()举例：watch demo.MathGame print '{params,returnObj,throwExp}'  -n 5  -x 3
     }
 
     @Override

@@ -47,7 +47,7 @@ public class JobImpl implements Job {
         this.runInBackground = new AtomicBoolean(runInBackground);
         this.shell = shell;
         this.foregroundUpdatedHandler = new ShellForegroundUpdateHandler(shell);
-        process.terminatedHandler(new TerminatedHandler(controller));
+        process.terminatedHandler(new TerminatedHandler(controller)); // process 终结后，调用指定的handler
     }
 
     public ExecStatus actualStatus() {

@@ -1,7 +1,7 @@
 package com.taobao.arthas.core.util.matcher;
 
 /**
- * wildcard matcher
+ * wildcard matcher：通配符匹配器
  * @author ralf0131 2017-01-06 13:17.
  */
 public class WildcardMatcher implements Matcher<String> {
