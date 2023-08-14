@@ -178,6 +178,8 @@ public class Arthas {
              */
             virtualMachine.loadAgent(arthasAgentPath,
                     configure.getArthasCore() + ";" + configure.toString());
+            System.out.println(arthasAgentPath);
+            System.out.println(configure.getArthasCore() + ";" + configure.toString());
         } finally {
             if (null != virtualMachine) {
                 virtualMachine.detach();

@@ -97,29 +97,23 @@ public class Enhancer implements ClassFileTransformer {
     public byte[] transform(final ClassLoader inClassLoader, String className, Class<?> classBeingRedefined, // classBeingRedefined参数举例：class demo.MathGame
                     ProtectionDomain protectionDomain, byte[] classfileBuffer) throws IllegalClassFormatException {
         try {
-
             System.out.println("transform, className="+className);
-
             // 这里要再次过滤一次，为啥？因为在transform的过程中，有可能还会再诞生新的类
             // 所以需要将之前需要转换的类集合传递下来，再次进行判断
             if (!matchingClasses.contains(classBeingRedefined)) {
                 return null;
             }
-
             final ClassReader cr;
-
             // 首先先检查是否在缓存中存在Class字节码
             // 因为要支持多人协作,存在多人同时增强的情况
             final byte[] byteOfClassInCache = classBytesCache.get(classBeingRedefined);
             if (null != byteOfClassInCache) {
                 cr = new ClassReader(byteOfClassInCache); // 增强的字节码存在，直接读取
             }
-
             // 如果没有命中缓存,则从原始字节码开始增强
             else {
                 cr = new ClassReader(classfileBuffer); // buffer为：类文件格式的输入字节缓冲区
             }
-
             // 字节码增强
             final ClassWriter cw = new ClassWriter(cr, COMPUTE_FRAMES | COMPUTE_MAXS) {
 
@@ -157,23 +151,18 @@ public class Enhancer implements ClassFileTransformer {
                         return c.getName().replace('.', '/');
                     }
                 }
-
             };
 
             // 生成增强字节码
             cr.accept(new AdviceWeaver(adviceId, isTracing, skipJDKTrace, cr.getClassName(), methodNameMatcher, affect,
                             cw), EXPAND_FRAMES);
             final byte[] enhanceClassByteArray = cw.toByteArray(); // 增强后的字节码
-
             // 生成成功,推入缓存
             classBytesCache.put(classBeingRedefined, enhanceClassByteArray);
-
             // dump the class
             dumpClassIfNecessary(className, enhanceClassByteArray, affect);
-
             // 成功计数
             affect.cCnt(1);
-
             // 派遣间谍
             try {
                 spy(inClassLoader);
@@ -181,7 +170,6 @@ public class Enhancer implements ClassFileTransformer {
                 logger.warn("print spy failed. classname={};loader={};", className, inClassLoader, t);
                 throw t;
             }
-
             return enhanceClassByteArray;
         } catch (Throwable t) {
             logger.warn("transform loader[{}]:class[{}] failed.", inClassLoader, className, t);
